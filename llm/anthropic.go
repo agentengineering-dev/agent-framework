@@ -20,7 +20,6 @@ func NewAnthropicClient() *anthropicLLM {
 	return &anthropicLLM{
 		client: client,
 	}
-
 }
 
 func (a *anthropicLLM) RunInference(messages []Message, tools []ToolDefinition) ([]Message, error) {
@@ -42,10 +41,12 @@ func (a *anthropicLLM) RunInference(messages []Message, tools []ToolDefinition) 
 			responseMessages = append(responseMessages, Message{
 				Role: transformRole(string(anthropicRespMessage.Role)),
 				Text: m.Text,
+				Type: MessageTypeText,
 			})
 		} else if m.Type == "tool_use" {
 			toolUse := m.AsToolUse()
 			responseMessages = append(responseMessages, Message{
+				Type: MessageTypeToolUse,
 				ToolUse: &ToolUse{
 					ID:    toolUse.ID,
 					Name:  toolUse.Name,
@@ -88,17 +89,19 @@ func transformToAnthropicTools(tools []ToolDefinition) []anthropic.ToolUnionPara
 func transformToAnthropicMessages(messages []Message) []anthropic.MessageParam {
 	anthropicMessages := make([]anthropic.MessageParam, len(messages))
 	for i, msg := range messages {
-		if msg.ToolUse != nil {
-			anthropicMessages[i] = anthropic.NewAssistantMessage(anthropic.NewToolUseBlock(msg.ToolUse.ID, msg.ToolUse.Input, msg.ToolUse.Name))
-		} else if msg.ToolResult != nil {
-			anthropicMessages[i] = anthropic.NewUserMessage(anthropic.NewToolResultBlock(msg.ToolResult.ID, msg.ToolResult.Content, msg.ToolResult.IsError))
-		} else if msg.Text != "" {
+		switch msg.Type {
+		case MessageTypeText:
 			if msg.Role == RoleUser {
 				anthropicMessages[i] = anthropic.NewUserMessage(anthropic.NewTextBlock(msg.Text))
 			} else if msg.Role == RoleAssistant {
 				anthropicMessages[i] = anthropic.NewAssistantMessage(anthropic.NewTextBlock(msg.Text))
 			}
+		case MessageTypeToolUse:
+			anthropicMessages[i] = anthropic.NewAssistantMessage(anthropic.NewToolUseBlock(msg.ToolUse.ID, msg.ToolUse.Input, msg.ToolUse.Name))
+		case MessageTypeToolResult:
+			anthropicMessages[i] = anthropic.NewUserMessage(anthropic.NewToolResultBlock(msg.ToolResult.ID, msg.ToolResult.Content, msg.ToolResult.IsError))
 		}
+
 	}
 	return anthropicMessages
 }

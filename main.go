@@ -23,11 +23,13 @@ func main() {
 	}
 
 	var goal = flag.String("goal", "", "What would you like the agent to do?")
+	var provider = flag.String("provider", "", "openai|anthropic|google")
 
 	flag.Parse()
 	userGoal := *goal
+	userProvider := *provider
 
-	client, err := llm.NewClient("anthropic")
+	client, err := llm.NewClient(userProvider)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,10 +38,12 @@ func main() {
 		{
 			Role: llm.RoleUser,
 			Text: systemPrompt,
+			Type: llm.MessageTypeText,
 		},
 		{
 			Role: llm.RoleUser,
 			Text: userGoal,
+			Type: llm.MessageTypeText,
 		},
 	}
 
@@ -99,6 +103,7 @@ func main() {
 		}
 		for _, tr := range toolResult {
 			inputMessages = append(inputMessages, llm.Message{
+				Type:       llm.MessageTypeToolResult,
 				ToolResult: &tr,
 			})
 		}

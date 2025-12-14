@@ -8,7 +8,16 @@ type LLM interface {
 	RunInference(messages []Message, tools []ToolDefinition) ([]Message, error)
 }
 
+type MessageType string
+
+const (
+	MessageTypeText       MessageType = "text"
+	MessageTypeToolUse    MessageType = "tool_use"
+	MessageTypeToolResult MessageType = "tool_result"
+)
+
 type Message struct {
+	Type       MessageType
 	Role       Role
 	Text       string
 	ToolResult *ToolResult
@@ -20,7 +29,6 @@ type Role string
 const (
 	RoleUser      Role = "user"
 	RoleAssistant Role = "assistant"
-	RoleSystem    Role = "system"
 )
 
 type ToolUse struct {
