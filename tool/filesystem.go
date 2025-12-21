@@ -11,7 +11,7 @@ import (
 // region list_files
 var ListFilesToolDefinition = llm.ToolDefinition{
 	Name:                "list_files",
-	Description:         "Returns a list of files in the current directory.",
+	Description:         "Returns a list of files in the given directory.",
 	InputSchemaInstance: ListFilesInput{},
 	Func:                ListFileImpl,
 }
@@ -75,4 +75,5 @@ var ReadFileImpl = func(message json.RawMessage) (string, error) {
 
 var ToolMap = map[string]llm.ToolDefinition{
 	"list_files": ListFilesToolDefinition,
+	"read_file":  ReadFileToolDefinition,
 }

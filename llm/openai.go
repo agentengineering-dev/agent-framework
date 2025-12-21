@@ -126,12 +126,18 @@ func transformToOpenAIMessages(messages []Message) []openai.ChatCompletionMessag
 			}
 		case MessageTypeToolUse:
 			openAIMessages[i] = openai.ChatCompletionMessageParamUnion{
-				OfTool: &openai.ChatCompletionToolMessageParam{
-					Content: openai.ChatCompletionToolMessageParamContentUnion{
-						OfString: openai.String(string(msg.ToolUse.Input)),
+				OfAssistant: &openai.ChatCompletionAssistantMessageParam{
+					ToolCalls: []openai.ChatCompletionMessageToolCallUnionParam{
+						{
+							OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
+								ID: msg.ToolUse.ID,
+								Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+									Arguments: string(msg.ToolUse.Input),
+									Name:      msg.ToolUse.Name,
+								},
+							},
+						},
 					},
-					ToolCallID: msg.ToolUse.ID,
-					Role:       "tool",
 				},
 			}
 		case MessageTypeToolResult:

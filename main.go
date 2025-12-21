@@ -66,46 +66,51 @@ func main() {
 		// print the response
 		for _, message := range respMessage {
 			if message.Text != "" {
-				fmt.Println(message.Text)
+				fmt.Println("Assistant: " + message.Text)
 			} else if message.ToolUse != nil {
 				inputJson, _ := json.MarshalIndent(message.ToolUse.Input, "", "  ")
-				fmt.Println(message.ToolUse.Name + ": " + string(inputJson))
+				fmt.Println(fmt.Sprintf("Assistant: ToolUse: ID: %s, Name: %s, Input: %s", message.ToolUse.ID, message.ToolUse.Name, string(inputJson)))
 			}
 		}
 		// add the llm resp to conversation history
-		inputMessages = append(inputMessages, respMessage...)
 
 		// execute tool if present
-		toolResult := []llm.ToolResult{}
+		hasToolUse := false
 		for _, block := range respMessage {
-			if block.ToolUse != nil {
+			switch block.Type {
+			case llm.MessageTypeText:
+				inputMessages = append(inputMessages, block)
+			case llm.MessageTypeToolUse:
+				hasToolUse = true
+				inputMessages = append(inputMessages, block)
 
 				toolResp, toolErr := tool.ExecuteTool(block.ToolUse.Name, block.ToolUse.Input)
-
+				var toolResult llm.ToolResult
 				if toolErr != nil {
-					toolResult = append(toolResult, llm.ToolResult{
+					toolResult = llm.ToolResult{
 						ID:      block.ToolUse.ID,
 						IsError: true,
 						Content: toolErr.Error(),
-					})
+					}
 				} else {
-					toolResult = append(toolResult, llm.ToolResult{
+					toolResult = llm.ToolResult{
 						ID:      block.ToolUse.ID,
 						IsError: false,
 						Content: toolResp,
-					})
+					}
 				}
+
+				inputMessages = append(inputMessages, llm.Message{
+					Type:       llm.MessageTypeToolResult,
+					ToolResult: &toolResult,
+				})
+				fmt.Println("User: ToolResult of ID: " + toolResult.ID + ", of length " + fmt.Sprintf("%d", len(toolResult.Content)))
 			}
 		}
 
-		if len(toolResult) == 0 {
+		if !hasToolUse {
 			break
 		}
-		for _, tr := range toolResult {
-			inputMessages = append(inputMessages, llm.Message{
-				Type:       llm.MessageTypeToolResult,
-				ToolResult: &tr,
-			})
-		}
+
 	}
 }

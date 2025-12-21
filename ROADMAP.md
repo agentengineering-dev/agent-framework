@@ -8,8 +8,7 @@ agent-framework Roadmap
 * [x] Integrate with Claude
 * [x] Write simple tools to list file.
 * [x] Test: Can the agent explore a project repository and summarize?
-
-* Read file tool
-* Support ChatGPT, gemini models 
+* [x] Read file tool
+* [] Support ChatGPT, gemini models 
 * Enhance tool set to search, write files. 
 * Test: Can the agent edit a correct file to
