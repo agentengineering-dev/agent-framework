@@ -35,12 +35,15 @@ type ToolUse struct {
 	ID    string
 	Name  string
 	Input json.RawMessage
+	// required by google
+	ThoughtSignature []byte
 }
 
 type ToolResult struct {
-	ID      string
-	Content string
-	IsError bool
+	ID       string
+	ToolName string
+	Content  string
+	IsError  bool
 }
 
 type ToolDefinition struct {

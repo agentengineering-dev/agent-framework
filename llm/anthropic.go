@@ -76,7 +76,7 @@ func transformToAnthropicTools(tools []ToolDefinition) []anthropic.ToolUnionPara
 		toolParams = append(toolParams, anthropic.ToolParam{
 			Name:        tool.Name,
 			Description: anthropic.String(tool.Description),
-			InputSchema: GenerateSchema(tool.InputSchemaInstance),
+			InputSchema: GenerateAnthropicSchema(tool.InputSchemaInstance),
 		})
 	}
 	anthropicTools := make([]anthropic.ToolUnionParam, len(toolParams))
@@ -106,7 +106,7 @@ func transformToAnthropicMessages(messages []Message) []anthropic.MessageParam {
 	return anthropicMessages
 }
 
-func GenerateSchema(inst interface{}) anthropic.ToolInputSchemaParam {
+func GenerateAnthropicSchema(inst interface{}) anthropic.ToolInputSchemaParam {
 	reflector := jsonschema.Reflector{
 		AllowAdditionalProperties: false,
 		DoNotReference:            true,

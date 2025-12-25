@@ -88,15 +88,17 @@ func main() {
 				var toolResult llm.ToolResult
 				if toolErr != nil {
 					toolResult = llm.ToolResult{
-						ID:      block.ToolUse.ID,
-						IsError: true,
-						Content: toolErr.Error(),
+						ToolName: block.ToolUse.Name,
+						ID:       block.ToolUse.ID,
+						IsError:  true,
+						Content:  toolErr.Error(),
 					}
 				} else {
 					toolResult = llm.ToolResult{
-						ID:      block.ToolUse.ID,
-						IsError: false,
-						Content: toolResp,
+						ToolName: block.ToolUse.Name,
+						ID:       block.ToolUse.ID,
+						IsError:  false,
+						Content:  toolResp,
 					}
 				}
 
@@ -105,6 +107,7 @@ func main() {
 					ToolResult: &toolResult,
 				})
 				fmt.Println("User: ToolResult of ID: " + toolResult.ID + ", of length " + fmt.Sprintf("%d", len(toolResult.Content)))
+				fmt.Println("User: ToolResult: " + toolResult.Content)
 			}
 		}
 
