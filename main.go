@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/agentengineering.dev/agent-framework/git_helpers"
 	"github.com/agentengineering.dev/agent-framework/llm"
 	"github.com/agentengineering.dev/agent-framework/tool"
 	"github.com/joho/godotenv"
@@ -17,17 +18,19 @@ Follow the goal given below:
 
 func main() {
 
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
 	var goal = flag.String("goal", "", "What would you like the agent to do?")
 	var provider = flag.String("provider", "", "openai|anthropic|google")
+	var envFile = flag.String("env-file", "", "The env file path")
 
 	flag.Parse()
 	userGoal := *goal
 	userProvider := *provider
+	envFileStr := *envFile
+
+	err := godotenv.Load(envFileStr)
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 
 	client, err := llm.NewClient(userProvider)
 	if err != nil {
@@ -51,9 +54,23 @@ func main() {
 
 	// tool definition
 
-	allTools := []llm.ToolDefinition{
-		tool.ListFilesToolDefinition,
-		tool.ReadFileToolDefinition,
+	allTools := []llm.ToolDefinition{}
+	for _, t := range tool.ToolMap {
+		allTools = append(allTools, t)
+	}
+
+	// git init.
+
+	git_helpers.Init()
+
+	// make llm inference for name?
+
+	branch := "feature-123"
+	// create a branch
+	err = git_helpers.CreateBranch(branch)
+	if err != nil {
+		fmt.Println("failed to create branch: ", err.Error())
+		return
 	}
 
 	for {
@@ -107,7 +124,7 @@ func main() {
 					ToolResult: &toolResult,
 				})
 				fmt.Println("User: ToolResult of ID: " + toolResult.ID + ", of length " + fmt.Sprintf("%d", len(toolResult.Content)))
-				fmt.Println("User: ToolResult: " + toolResult.Content)
+				//fmt.Println("User: ToolResult: " + toolResult.Content)
 			}
 		}
 

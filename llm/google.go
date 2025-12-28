@@ -3,6 +3,8 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/invopop/jsonschema"
 	"google.golang.org/genai"
 	"os"
@@ -144,12 +146,17 @@ func transformToGoogleRole(role Role) string {
 func transformToGoogleTools(tools []ToolDefinition) []*genai.Tool {
 	googleTools := []*genai.Tool{}
 	for _, tool := range tools {
+		schema, err := GenerateGoogleSchema(tool.InputSchemaInstance)
+		if err != nil {
+			fmt.Println("failed to register tool", tool.Name, err.Error())
+			continue
+		}
 		googleTools = append(googleTools, &genai.Tool{
 			FunctionDeclarations: []*genai.FunctionDeclaration{
 				{
 					Name:                 tool.Name,
 					Description:          tool.Description,
-					ParametersJsonSchema: GenerateGoogleSchema(tool.InputSchemaInstance),
+					ParametersJsonSchema: schema,
 				},
 			},
 		})
@@ -157,11 +164,20 @@ func transformToGoogleTools(tools []ToolDefinition) []*genai.Tool {
 	return googleTools
 }
 
-func GenerateGoogleSchema(inst interface{}) any {
+func GenerateGoogleSchema(inst interface{}) (any, error) {
 	reflector := jsonschema.Reflector{
 		AllowAdditionalProperties: false,
 		DoNotReference:            true,
 	}
 	schema := reflector.Reflect(inst)
-	return schema.Properties
+	schemaMap, err := schema.MarshalJSON()
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("failed to marshal schema: %+v", inst))
+	}
+	result := make(map[string]any)
+	err = json.Unmarshal(schemaMap, &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
