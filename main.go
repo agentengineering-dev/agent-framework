@@ -9,12 +9,21 @@ import (
 	"github.com/agentengineering.dev/agent-framework/tool"
 	"github.com/joho/godotenv"
 	"log"
+	"time"
 )
 
 const systemPrompt = `
 You are an autonomous agent working in a project repository.
+The goal can either be an question or instruction.
+If it's a question, append the answer to QA.md file 
+Else follow the given instruction 
 Follow the goal given below:
 `
+
+type SessionMetadata struct {
+	SessionName string `json:"session_name" jsonschema_description:"The name of the session"`
+	BranchName  string `json:"branch_name" jsonschema_description:"The name of the branch"`
+}
 
 func main() {
 
@@ -60,25 +69,47 @@ func main() {
 	}
 
 	// git init.
-
 	git_helpers.Init()
 
 	// make llm inference for name?
 
-	branch := "feature-123"
+	sessionInitMessages := []llm.Message{
+		{
+			Role: llm.RoleUser,
+			Type: llm.MessageTypeText,
+			Text: "Given the goal below, give a name summarizing the session, and name of the branch that needs to be created in the repo: Given goal\n " + userGoal,
+		},
+	}
+
+	sessionMetadata := SessionMetadata{}
+
+	md, err := client.GenerateStructuredResponse(sessionInitMessages, &sessionMetadata)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(fmt.Sprintf("Agent: Inference cost: $%f, time: %s", md.Cost, md.Time))
+
+	branch := sessionMetadata.BranchName
 	// create a branch
 	err = git_helpers.CreateBranch(branch)
 	if err != nil {
 		fmt.Println("failed to create branch: ", err.Error())
 		return
 	}
-
+	cost := 0.0
+	totalTime := time.Duration(0)
 	for {
 		// run inference.
-		respMessage, err := client.RunInference(inputMessages, allTools)
+		respMessage, md, err := client.RunInference(inputMessages, allTools)
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		cost += float64(md.Cost)
+		totalTime += md.Time
+
+		fmt.Println(fmt.Sprintf("Agent: Loop Inference cost: $%f, time: %s", md.Cost, md.Time))
 
 		// print the response
 		for _, message := range respMessage {
@@ -133,4 +164,6 @@ func main() {
 		}
 
 	}
+	fmt.Println(fmt.Sprintf("Agent: Session Inference cost: $%f, time: %s", md.Cost, md.Time))
+
 }

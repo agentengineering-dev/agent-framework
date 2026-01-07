@@ -10,6 +10,8 @@ import (
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/shared"
 	"os"
+	"strings"
+	"time"
 )
 
 type openAILLM struct {
@@ -26,22 +28,31 @@ func NewOpenAILLM() *openAILLM {
 	}
 }
 
-func (o *openAILLM) RunInference(messages []Message, tools []ToolDefinition) ([]Message, error) {
+func (o *openAILLM) RunInference(messages []Message, tools []ToolDefinition) ([]Message, *Metadata, error) {
 	openAIMessages := transformToOpenAIMessages(messages)
 	openAITools, err := transformToOpenAITools(tools)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-
+	now := time.Now()
 	chatCompletion, err := o.client.Chat.Completions.New(context.Background(), openai.ChatCompletionNewParams{
 		Messages: openAIMessages,
 		Model:    openai.ChatModelGPT5_2,
 		Tools:    openAITools,
 	})
-	if err != nil {
-		return nil, err
-	}
 
+	timeTaken := time.Since(now)
+
+	if err != nil {
+		return nil, nil, err
+	}
+	cost := computeOpenAICost(openai.ChatModelGPT5_2, chatCompletion.Usage)
+	if chatCompletion.Choices[0].FinishReason == "length" {
+		return nil, &Metadata{
+			Cost: cost,
+			Time: timeTaken,
+		}, errors.New("max token exceeded")
+	}
 	responseMessages := []Message{}
 
 	if len(chatCompletion.Choices) > 0 {
@@ -68,7 +79,47 @@ func (o *openAILLM) RunInference(messages []Message, tools []ToolDefinition) ([]
 		}
 	}
 
-	return responseMessages, nil
+	return responseMessages, &Metadata{
+		Cost: cost,
+		Time: timeTaken,
+	}, nil
+}
+
+func computeOpenAICost(model string, usage openai.CompletionUsage) float64 {
+	cost := 0.0
+
+	oneMil := 1000000.0
+	inputPerM := 0.0
+	outputPerM := 0.0
+	cacheReadPerM := 0.0
+
+	if strings.HasPrefix(model, "gpt-5.2-pro") {
+		inputPerM = 21
+		outputPerM = 168
+	} else if strings.HasPrefix(model, "gpt-5.2") {
+		inputPerM = 1.75
+		outputPerM = 14
+		cacheReadPerM = 0.175
+	} else if strings.HasPrefix(model, "gpt-5-mini") {
+		inputPerM = 1.25
+		outputPerM = 10
+		cacheReadPerM = 0.125
+	} else if strings.HasPrefix(model, "gpt-5-nano") {
+		inputPerM = 0.05
+		outputPerM = 0.4
+		cacheReadPerM = 0.005
+	}
+
+	// add input token cost
+	cost += float64(usage.PromptTokens-usage.PromptTokensDetails.CachedTokens) * inputPerM / oneMil
+
+	// add cache read cost
+	cost += float64(usage.PromptTokensDetails.CachedTokens) * cacheReadPerM / oneMil
+
+	// add output token cost
+	cost += float64(usage.CompletionTokens) * outputPerM / oneMil
+
+	return cost
 }
 
 func transformToOpenAITools(tools []ToolDefinition) ([]openai.ChatCompletionToolUnionParam, error) {
@@ -150,4 +201,62 @@ func transformToOpenAIMessages(messages []Message) []openai.ChatCompletionMessag
 	}
 	return openAIMessages
 
+}
+
+func (o openAILLM) GenerateStructuredResponse(messages []Message, resp interface{}) (*Metadata, error) {
+	openAIMessages := transformToOpenAIMessages(messages)
+
+	schema, err := GenerateOpenAISchema(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	params := openai.ChatCompletionNewParams{
+		Messages:            openAIMessages,
+		Model:               openai.ChatModelGPT5_2,
+		MaxCompletionTokens: openai.Int(1000 * 10),
+		ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
+				JSONSchema: shared.ResponseFormatJSONSchemaJSONSchemaParam{
+					Name:   "generate_structured_response",
+					Strict: openai.Bool(true),
+					Schema: schema,
+				},
+			},
+		},
+	}
+	now := time.Now()
+	chatCompletion, err := o.client.Chat.Completions.New(context.Background(), params)
+	if err != nil {
+		return nil, err
+	}
+	timeTaken := time.Since(now)
+
+	cost := computeOpenAICost(openai.ChatModelGPT5_2, chatCompletion.Usage)
+
+	if chatCompletion.Choices[0].FinishReason == "length" {
+		return &Metadata{
+			Cost: cost,
+			Time: timeTaken,
+		}, errors.New("max token exceeded")
+	}
+
+	if len(chatCompletion.Choices) > 0 {
+		msg := chatCompletion.Choices[0].Message
+		if msg.Content != "" {
+			err := json.Unmarshal([]byte(msg.Content), resp)
+			if err != nil {
+				return &Metadata{
+					Cost: cost,
+					Time: timeTaken,
+				}, err
+			}
+		}
+
+	}
+
+	return &Metadata{
+		Cost: cost,
+		Time: timeTaken,
+	}, nil
 }

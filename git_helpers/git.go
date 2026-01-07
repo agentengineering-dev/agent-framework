@@ -6,6 +6,7 @@ import (
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -32,6 +33,7 @@ func getOrInitRepo(path string) (*git.Repository, bool, error) {
 	// Try to open existing repo
 	repo, err := git.PlainOpen(path)
 	if err == nil {
+		fmt.Println("Agent: Found and opened git repository")
 		return repo, false, nil
 	}
 
@@ -41,6 +43,42 @@ func getOrInitRepo(path string) (*git.Repository, bool, error) {
 		if err != nil {
 			return nil, false, err
 		}
+		fmt.Println("Agent: Inited and opened git repository")
+
+		// create main branch
+		handRef := plumbing.NewSymbolicReference(
+			plumbing.HEAD,
+			plumbing.NewBranchReferenceName("main"),
+		)
+		if err := repo.Storer.SetReference(handRef); err != nil {
+			return nil, false, err
+		}
+
+		wt, err := repo.Worktree()
+		if err != nil {
+			return nil, false, err
+		}
+
+		err = os.WriteFile(".gitkeep", []byte(""), 0o644)
+		if err != nil {
+			return nil, false, err
+		}
+
+		_, err = wt.Add(".gitkeep")
+		if err != nil {
+			return nil, false, err
+		}
+		_, err = wt.Commit("initial commit", &git.CommitOptions{
+			Author: &object.Signature{
+				Name:  "agent-framework",
+				Email: "agent-framework@agentengineering.dev",
+				When:  time.Now(),
+			},
+		})
+		if err != nil {
+			return nil, false, err
+		}
+
 		return repo, true, nil
 	}
 
@@ -58,10 +96,29 @@ func CreateBranch(branchName string) error {
 		return err
 	}
 
-	return w.Checkout(&git.CheckoutOptions{
+	err = w.Checkout(&git.CheckoutOptions{
 		Branch: plumbing.NewBranchReferenceName(branchName),
 		Create: true,
 	})
+
+	if err == nil {
+		fmt.Println("Agent: Created branch: ", branchName)
+		return nil
+	}
+
+	if strings.Contains(err.Error(), "already exists") {
+		suffix := time.Now().Format("20060102150405")
+		newName := fmt.Sprintf("%s-%s", branchName, suffix)
+
+		fmt.Println("Agent: Branch exists, Created new branch: ", newName)
+		err = w.Checkout(&git.CheckoutOptions{
+			Branch: plumbing.NewBranchReferenceName(branchName),
+			Create: true,
+		})
+		return nil
+
+	}
+	return err
 }
 
 func AddAllAndCommit(message, authorName, authorEmail string) error {
