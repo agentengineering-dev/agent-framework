@@ -9,6 +9,12 @@ agent-framework Roadmap
 * [x] Write simple tools to list file.
 * [x] Test: Can the agent explore a project repository and summarize?
 * [x] Read file tool
-* [] Support ChatGPT, gemini models 
-* Enhance tool set to search, write files. 
-* Test: Can the agent edit a correct file to
+* [x] Support ChatGPT, gemini models 
+  
+* [] Write tool 
+* [] fix anthropic write bug.
+* * Test: Can the agent edit a correct file to
+
+
+
+* [] Cost/Token Tracking.

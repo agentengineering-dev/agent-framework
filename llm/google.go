@@ -3,13 +3,66 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/invopop/jsonschema"
 	"google.golang.org/genai"
 	"os"
+	"strings"
+	"time"
 )
 
 type googleClient struct {
 	client *genai.Client
+}
+
+func (g googleClient) GenerateStructuredResponse(messages []Message, resp interface{}) (*Metadata, error) {
+	googleMessages := transformToGoogleMessages(messages)
+
+	schema, err := GenerateGoogleSchema(resp)
+	if err != nil {
+		return nil, err
+	}
+	cfg := &genai.GenerateContentConfig{
+		ResponseJsonSchema: schema,
+		MaxOutputTokens:    1000 * 10,
+	}
+	now := time.Now()
+	googleResponse, err := g.client.Models.GenerateContent(context.Background(), "gemini-3-pro-preview", googleMessages, cfg)
+	if err != nil {
+		return nil, err
+	}
+	timeTaken := time.Since(now)
+
+	cost := computeGoogleCost("gemini-3-pro-preview", googleResponse.UsageMetadata)
+
+	if len(googleResponse.Candidates) > 0 {
+		if googleResponse.Candidates[0].FinishReason == genai.FinishReasonMaxTokens {
+			return &Metadata{
+				Cost: cost,
+				Time: timeTaken,
+			}, fmt.Errorf("max_tokens exceeded")
+		}
+
+		if len(googleResponse.Candidates[0].Content.Parts) > 0 {
+			var err = json.Unmarshal([]byte(googleResponse.Candidates[0].Content.Parts[0].Text), resp)
+			if err != nil {
+				return &Metadata{
+					Cost: cost,
+					Time: timeTaken,
+				}, err
+			}
+		} else {
+			return &Metadata{
+				Cost: cost,
+				Time: timeTaken,
+			}, errors.New("no suitable result")
+		}
+	}
+	return &Metadata{
+		Cost: cost,
+		Time: timeTaken,
+	}, nil
 }
 
 func NewGoogleClient() (*googleClient, error) {
@@ -24,22 +77,68 @@ func NewGoogleClient() (*googleClient, error) {
 	return &googleClient{client}, nil
 }
 
-func (g googleClient) RunInference(messages []Message, tools []ToolDefinition) ([]Message, error) {
+func (g googleClient) RunInference(messages []Message, tools []ToolDefinition) ([]Message, *Metadata, error) {
 	googleMessages := transformToGoogleMessages(messages)
 	googleTools := transformToGoogleTools(tools)
 
 	cfg := &genai.GenerateContentConfig{
-		Tools: googleTools,
+		Tools:           googleTools,
+		MaxOutputTokens: 1000 * 10,
 	}
+	now := time.Now()
 	googleResponse, err := g.client.Models.GenerateContent(context.Background(), "gemini-3-pro-preview", googleMessages, cfg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	timeTaken := time.Since(now)
+	cost := computeGoogleCost("gemini-3-pro-preview", googleResponse.UsageMetadata)
+
 	var response []Message
 	if len(googleResponse.Candidates) > 0 {
+		if googleResponse.Candidates[0].FinishReason == genai.FinishReasonMaxTokens {
+			return nil, &Metadata{
+				Cost: cost,
+				Time: timeTaken,
+			}, fmt.Errorf("max_tokens exceeded")
+		}
+
 		response = transformFromGoogleMessage(googleResponse.Candidates[0].Content)
 	}
-	return response, nil
+	return response, &Metadata{
+		Cost: cost,
+		Time: timeTaken,
+	}, nil
+}
+
+func computeGoogleCost(model string, metadata *genai.GenerateContentResponseUsageMetadata) float64 {
+	oneMil := 1000000.0
+	inputPerM := 0.0
+	outputPerM := 0.0
+	cacheReadPerM := 0.0
+
+	cost := 0.0
+
+	if strings.HasPrefix(model, "gemini-3-pro") {
+		if metadata.PromptTokenCount >= 200000 {
+			inputPerM = 4
+			outputPerM = 18
+			cacheReadPerM = 0.4
+		} else {
+			inputPerM = 2
+			outputPerM = 12
+			cacheReadPerM = 0.2
+		}
+	} else if strings.HasPrefix(model, "gemini-3-flash") {
+		inputPerM = 2
+		outputPerM = 12
+		cacheReadPerM = 0.2
+	}
+	cost += float64(metadata.PromptTokenCount-metadata.CachedContentTokenCount) * inputPerM / oneMil
+
+	cost += float64(metadata.CachedContentTokenCount) * cacheReadPerM / oneMil
+	cost += float64(metadata.CandidatesTokenCount) * outputPerM / oneMil
+	return cost
+
 }
 
 func transformFromGoogleMessage(content *genai.Content) []Message {
@@ -144,12 +243,17 @@ func transformToGoogleRole(role Role) string {
 func transformToGoogleTools(tools []ToolDefinition) []*genai.Tool {
 	googleTools := []*genai.Tool{}
 	for _, tool := range tools {
+		schema, err := GenerateGoogleSchema(tool.InputSchemaInstance)
+		if err != nil {
+			fmt.Println("failed to register tool", tool.Name, err.Error())
+			continue
+		}
 		googleTools = append(googleTools, &genai.Tool{
 			FunctionDeclarations: []*genai.FunctionDeclaration{
 				{
 					Name:                 tool.Name,
 					Description:          tool.Description,
-					ParametersJsonSchema: GenerateGoogleSchema(tool.InputSchemaInstance),
+					ParametersJsonSchema: schema,
 				},
 			},
 		})
@@ -157,11 +261,20 @@ func transformToGoogleTools(tools []ToolDefinition) []*genai.Tool {
 	return googleTools
 }
 
-func GenerateGoogleSchema(inst interface{}) any {
+func GenerateGoogleSchema(inst interface{}) (any, error) {
 	reflector := jsonschema.Reflector{
 		AllowAdditionalProperties: false,
 		DoNotReference:            true,
 	}
 	schema := reflector.Reflect(inst)
-	return schema.Properties
+	schemaMap, err := schema.MarshalJSON()
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("failed to marshal schema: %+v", inst))
+	}
+	result := make(map[string]any)
+	err = json.Unmarshal(schemaMap, &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }

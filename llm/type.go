@@ -2,10 +2,17 @@ package llm
 
 import (
 	"encoding/json"
+	"time"
 )
 
 type LLM interface {
-	RunInference(messages []Message, tools []ToolDefinition) ([]Message, error)
+	RunInference(messages []Message, tools []ToolDefinition) ([]Message, *Metadata, error)
+	GenerateStructuredResponse(messages []Message, resp interface{}) (*Metadata, error)
+}
+
+type Metadata struct {
+	Cost float64
+	Time time.Duration
 }
 
 type MessageType string
