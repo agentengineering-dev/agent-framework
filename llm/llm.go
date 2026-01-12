@@ -15,6 +15,8 @@ func NewClient(provider string) (LLM, error) {
 		llm = NewAnthropicClient()
 	case "openai":
 		llm = NewOpenAILLM()
+	case "ollama":
+		llm, err = NewOllamaLLM()
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", provider)
 	}

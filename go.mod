@@ -4,9 +4,12 @@ go 1.24.4
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.18.1
+	github.com/go-git/go-git/v6 v6.0.0-20251224103503-78aff6aa5ea9
 	github.com/invopop/jsonschema v0.13.0
 	github.com/joho/godotenv v1.5.1
+	github.com/ollama/ollama v0.13.5
 	github.com/openai/openai-go/v3 v3.12.0
+	google.golang.org/genai v1.40.0
 )
 
 require (
@@ -22,10 +25,10 @@ require (
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/go-git/gcfg/v2 v2.0.2 // indirect
 	github.com/go-git/go-billy/v6 v6.0.0-20251209065551-8afc3eb64e4d // indirect
-	github.com/go-git/go-git/v6 v6.0.0-20251224103503-78aff6aa5ea9 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
-	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/kevinburke/ssh_config v1.4.0 // indirect
@@ -43,7 +46,6 @@ require (
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/text v0.32.0 // indirect
-	google.golang.org/genai v1.40.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
 	google.golang.org/grpc v1.66.2 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
