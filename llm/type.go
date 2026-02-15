@@ -6,11 +6,11 @@ import (
 )
 
 type LLM interface {
-	RunInference(messages []Message, tools []ToolDefinition) ([]Message, *Metadata, error)
-	GenerateStructuredResponse(messages []Message, resp interface{}) (*Metadata, error)
+	RunInference(messages []Message, tools []ToolDefinition) ([]Message, *InferenceMetadata, error)
+	GenerateStructuredResponse(messages []Message, resp interface{}) (*InferenceMetadata, error)
 }
 
-type Metadata struct {
+type InferenceMetadata struct {
 	Cost float64
 	Time time.Duration
 }

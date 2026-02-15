@@ -16,7 +16,7 @@ type googleClient struct {
 	client *genai.Client
 }
 
-func (g googleClient) GenerateStructuredResponse(messages []Message, resp interface{}) (*Metadata, error) {
+func (g googleClient) GenerateStructuredResponse(messages []Message, resp interface{}) (*InferenceMetadata, error) {
 	googleMessages := transformToGoogleMessages(messages)
 
 	schema, err := GenerateGoogleSchema(resp)
@@ -38,7 +38,7 @@ func (g googleClient) GenerateStructuredResponse(messages []Message, resp interf
 
 	if len(googleResponse.Candidates) > 0 {
 		if googleResponse.Candidates[0].FinishReason == genai.FinishReasonMaxTokens {
-			return &Metadata{
+			return &InferenceMetadata{
 				Cost: cost,
 				Time: timeTaken,
 			}, fmt.Errorf("max_tokens exceeded")
@@ -47,19 +47,19 @@ func (g googleClient) GenerateStructuredResponse(messages []Message, resp interf
 		if len(googleResponse.Candidates[0].Content.Parts) > 0 {
 			var err = json.Unmarshal([]byte(googleResponse.Candidates[0].Content.Parts[0].Text), resp)
 			if err != nil {
-				return &Metadata{
+				return &InferenceMetadata{
 					Cost: cost,
 					Time: timeTaken,
 				}, err
 			}
 		} else {
-			return &Metadata{
+			return &InferenceMetadata{
 				Cost: cost,
 				Time: timeTaken,
 			}, errors.New("no suitable result")
 		}
 	}
-	return &Metadata{
+	return &InferenceMetadata{
 		Cost: cost,
 		Time: timeTaken,
 	}, nil
@@ -77,7 +77,7 @@ func NewGoogleClient() (*googleClient, error) {
 	return &googleClient{client}, nil
 }
 
-func (g googleClient) RunInference(messages []Message, tools []ToolDefinition) ([]Message, *Metadata, error) {
+func (g googleClient) RunInference(messages []Message, tools []ToolDefinition) ([]Message, *InferenceMetadata, error) {
 	googleMessages := transformToGoogleMessages(messages)
 	googleTools := transformToGoogleTools(tools)
 
@@ -96,7 +96,7 @@ func (g googleClient) RunInference(messages []Message, tools []ToolDefinition) (
 	var response []Message
 	if len(googleResponse.Candidates) > 0 {
 		if googleResponse.Candidates[0].FinishReason == genai.FinishReasonMaxTokens {
-			return nil, &Metadata{
+			return nil, &InferenceMetadata{
 				Cost: cost,
 				Time: timeTaken,
 			}, fmt.Errorf("max_tokens exceeded")
@@ -104,7 +104,7 @@ func (g googleClient) RunInference(messages []Message, tools []ToolDefinition) (
 
 		response = transformFromGoogleMessage(googleResponse.Candidates[0].Content)
 	}
-	return response, &Metadata{
+	return response, &InferenceMetadata{
 		Cost: cost,
 		Time: timeTaken,
 	}, nil

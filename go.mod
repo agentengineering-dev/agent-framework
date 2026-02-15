@@ -8,7 +8,7 @@ require (
 	github.com/invopop/jsonschema v0.13.0
 	github.com/joho/godotenv v1.5.1
 	github.com/ollama/ollama v0.13.5
-	github.com/openai/openai-go/v3 v3.12.0
+	github.com/openai/openai-go/v3 v3.17.0
 	google.golang.org/genai v1.40.0
 )
 

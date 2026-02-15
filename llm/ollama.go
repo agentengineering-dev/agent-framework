@@ -23,7 +23,7 @@ func NewOllamaLLM() (*ollamaLLM, error) {
 	return &ollamaLLM{client: client}, nil
 }
 
-func (o *ollamaLLM) GenerateStructuredResponse(messages []Message, resp interface{}) (*Metadata, error) {
+func (o *ollamaLLM) GenerateStructuredResponse(messages []Message, resp interface{}) (*InferenceMetadata, error) {
 	ollamaMessages := transformToOllamaMessages(messages)
 
 	tools := []api.Tool{
@@ -65,23 +65,25 @@ func (o *ollamaLLM) GenerateStructuredResponse(messages []Message, resp interfac
 	if err != nil {
 		return nil, err
 	}
-	return &Metadata{
+	return &InferenceMetadata{
 		Cost: 0,
 		Time: timeTaken,
 	}, nil
 
 }
 
-func (o *ollamaLLM) RunInference(messages []Message, tools []ToolDefinition) ([]Message, *Metadata, error) {
+func (o *ollamaLLM) RunInference(messages []Message, tools []ToolDefinition) ([]Message, *InferenceMetadata, error) {
 	ollamaMessages := transformToOllamaMessages(messages)
 	ollamaTools := transformToOllamaTools(tools)
 
 	var ollamaResponseMessages []api.ChatResponse
 	start := time.Now()
+	streamCfg := false
 	err := o.client.Chat(context.Background(), &api.ChatRequest{
 		Model:    "qwen3-coder",
 		Messages: ollamaMessages,
 		Tools:    ollamaTools,
+		Stream:   &streamCfg,
 	}, func(response api.ChatResponse) error {
 		ollamaResponseMessages = append(ollamaResponseMessages, response)
 		return nil
@@ -89,7 +91,7 @@ func (o *ollamaLLM) RunInference(messages []Message, tools []ToolDefinition) ([]
 
 	timeTaken := time.Since(start)
 	if err != nil {
-		return nil, &Metadata{
+		return nil, &InferenceMetadata{
 			Cost: 0,
 			Time: timeTaken,
 		}, err
@@ -97,7 +99,7 @@ func (o *ollamaLLM) RunInference(messages []Message, tools []ToolDefinition) ([]
 
 	respMessages := transformFromOllamaMessage(ollamaResponseMessages)
 
-	return respMessages, &Metadata{
+	return respMessages, &InferenceMetadata{
 		Cost: 0,
 		Time: timeTaken,
 	}, nil

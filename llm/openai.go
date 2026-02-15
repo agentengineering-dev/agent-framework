@@ -28,7 +28,7 @@ func NewOpenAILLM() *openAILLM {
 	}
 }
 
-func (o *openAILLM) RunInference(messages []Message, tools []ToolDefinition) ([]Message, *Metadata, error) {
+func (o *openAILLM) RunInference(messages []Message, tools []ToolDefinition) ([]Message, *InferenceMetadata, error) {
 	openAIMessages := transformToOpenAIMessages(messages)
 	openAITools, err := transformToOpenAITools(tools)
 	if err != nil {
@@ -48,7 +48,7 @@ func (o *openAILLM) RunInference(messages []Message, tools []ToolDefinition) ([]
 	}
 	cost := computeOpenAICost(openai.ChatModelGPT5_2, chatCompletion.Usage)
 	if chatCompletion.Choices[0].FinishReason == "length" {
-		return nil, &Metadata{
+		return nil, &InferenceMetadata{
 			Cost: cost,
 			Time: timeTaken,
 		}, errors.New("max token exceeded")
@@ -79,7 +79,7 @@ func (o *openAILLM) RunInference(messages []Message, tools []ToolDefinition) ([]
 		}
 	}
 
-	return responseMessages, &Metadata{
+	return responseMessages, &InferenceMetadata{
 		Cost: cost,
 		Time: timeTaken,
 	}, nil
@@ -203,7 +203,7 @@ func transformToOpenAIMessages(messages []Message) []openai.ChatCompletionMessag
 
 }
 
-func (o openAILLM) GenerateStructuredResponse(messages []Message, resp interface{}) (*Metadata, error) {
+func (o openAILLM) GenerateStructuredResponse(messages []Message, resp interface{}) (*InferenceMetadata, error) {
 	openAIMessages := transformToOpenAIMessages(messages)
 
 	schema, err := GenerateOpenAISchema(resp)
@@ -235,7 +235,7 @@ func (o openAILLM) GenerateStructuredResponse(messages []Message, resp interface
 	cost := computeOpenAICost(openai.ChatModelGPT5_2, chatCompletion.Usage)
 
 	if chatCompletion.Choices[0].FinishReason == "length" {
-		return &Metadata{
+		return &InferenceMetadata{
 			Cost: cost,
 			Time: timeTaken,
 		}, errors.New("max token exceeded")
@@ -246,7 +246,7 @@ func (o openAILLM) GenerateStructuredResponse(messages []Message, resp interface
 		if msg.Content != "" {
 			err := json.Unmarshal([]byte(msg.Content), resp)
 			if err != nil {
-				return &Metadata{
+				return &InferenceMetadata{
 					Cost: cost,
 					Time: timeTaken,
 				}, err
@@ -255,7 +255,7 @@ func (o openAILLM) GenerateStructuredResponse(messages []Message, resp interface
 
 	}
 
-	return &Metadata{
+	return &InferenceMetadata{
 		Cost: cost,
 		Time: timeTaken,
 	}, nil

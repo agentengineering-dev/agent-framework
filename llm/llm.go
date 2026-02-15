@@ -17,6 +17,8 @@ func NewClient(provider string) (LLM, error) {
 		llm = NewOpenAILLM()
 	case "ollama":
 		llm, err = NewOllamaLLM()
+	case "deepseek":
+		llm = NewDeepSeekLLM()
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", provider)
 	}
