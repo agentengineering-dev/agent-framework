@@ -16,7 +16,7 @@ type anthropicLLM struct {
 	client anthropic.Client
 }
 
-func (a *anthropicLLM) GenerateStructuredResponse(messages []Message, resp interface{}) (*Metadata, error) {
+func (a *anthropicLLM) GenerateStructuredResponse(messages []Message, resp interface{}) (*InferenceMetadata, error) {
 	anthropicMessages := transformToAnthropicMessages(messages)
 	var anthropicTools = transformToAnthropicTools([]ToolDefinition{
 		{
@@ -46,7 +46,7 @@ func (a *anthropicLLM) GenerateStructuredResponse(messages []Message, resp inter
 			err := json.Unmarshal(toolUse.Input, resp)
 
 			if err != nil {
-				return &Metadata{
+				return &InferenceMetadata{
 					Cost: cost,
 					Time: timeTaken,
 				}, err
@@ -54,7 +54,7 @@ func (a *anthropicLLM) GenerateStructuredResponse(messages []Message, resp inter
 		}
 	}
 
-	return &Metadata{
+	return &InferenceMetadata{
 		Cost: cost,
 		Time: timeTaken,
 	}, nil
@@ -70,7 +70,7 @@ func NewAnthropicClient() *anthropicLLM {
 	}
 }
 
-func (a *anthropicLLM) RunInference(messages []Message, tools []ToolDefinition) ([]Message, *Metadata, error) {
+func (a *anthropicLLM) RunInference(messages []Message, tools []ToolDefinition) ([]Message, *InferenceMetadata, error) {
 	anthropicMessages := transformToAnthropicMessages(messages)
 	anthropicTools := transformToAnthropicTools(tools)
 	now := time.Now()
@@ -87,7 +87,7 @@ func (a *anthropicLLM) RunInference(messages []Message, tools []ToolDefinition) 
 	cost := computeAnthropicCost(string(anthropic.ModelClaudeSonnet4_5_20250929), anthropicRespMessage.Usage)
 
 	if anthropicRespMessage.StopReason == "max_tokens" {
-		return nil, &Metadata{Cost: cost, Time: timeTaken}, fmt.Errorf("max_tokens exceeded")
+		return nil, &InferenceMetadata{Cost: cost, Time: timeTaken}, fmt.Errorf("max_tokens exceeded")
 	}
 	responseMessages := []Message{}
 
@@ -111,7 +111,7 @@ func (a *anthropicLLM) RunInference(messages []Message, tools []ToolDefinition) 
 		}
 	}
 
-	return responseMessages, &Metadata{Cost: cost, Time: timeTaken}, nil
+	return responseMessages, &InferenceMetadata{Cost: cost, Time: timeTaken}, nil
 
 }
 
