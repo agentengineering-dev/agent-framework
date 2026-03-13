@@ -8,7 +8,6 @@ import (
 	"github.com/agentengineering.dev/agent-framework/tool"
 	"github.com/gin-gonic/gin"
 	"log"
-	"net/http"
 	"time"
 )
 
@@ -20,21 +19,33 @@ Else follow the given instruction
 Follow the goal given below:
 `
 
-type CreateAgentSessionParams struct {
-	Goal     string `json:"goal"`
-	Provider string `json:"provider"`
-}
-
-type SessionMetadata struct {
-	SessionName string `json:"session_name" jsonschema_description:"The name of the session"`
-	BranchName  string `json:"branch_name" jsonschema_description:"The name of the branch"`
-}
-
 func CreateAgentSession(c *gin.Context) {
-	var r CreateAgentSessionParams
-	err := c.BindJSON(&r)
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	defer conn.Close()
+
+	// read initial request message
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		conn.WriteJSON(gin.H{"error": "failed to read request"})
+		return
+	}
+	event := AgentSessionEvent{
+		Type: AgentSessionEventText,
+		Role: RoleAgent,
+		Text: "Agent Started: ",
+	}
+
+	err = conn.WriteJSON(event)
+	if err != nil {
+		return
+	}
+
+	var r CreateAgentSessionParams
+	if err := json.Unmarshal(msg, &r); err != nil {
+		conn.WriteJSON(gin.H{"error": err.Error()})
 		return
 	}
 
@@ -54,6 +65,27 @@ func CreateAgentSession(c *gin.Context) {
 			Text: r.Goal,
 			Type: llm.MessageTypeText,
 		},
+	}
+	event = AgentSessionEvent{
+		Type: AgentSessionEventText,
+		Role: RoleUser,
+		Text: r.Provider,
+	}
+
+	err = conn.WriteJSON(event)
+	if err != nil {
+		return
+	}
+
+	event = AgentSessionEvent{
+		Type: AgentSessionEventText,
+		Role: RoleUser,
+		Text: r.Goal,
+	}
+
+	err = conn.WriteJSON(event)
+	if err != nil {
+		return
 	}
 
 	// agent loop
@@ -88,6 +120,18 @@ func CreateAgentSession(c *gin.Context) {
 	fmt.Println(fmt.Sprintf("Agent: Inference cost: $%f, time: %s", md.Cost, md.Time))
 
 	branch := sessionMetadata.BranchName
+
+	event = AgentSessionEvent{
+		Type: AgentSessionEventText,
+		Role: RoleAgent,
+		Text: "Branch created: " + branch,
+	}
+
+	err = conn.WriteJSON(event)
+	if err != nil {
+		return
+	}
+
 	// create a branch
 	err = git_helpers.CreateBranch(branch)
 	if err != nil {
@@ -112,9 +156,34 @@ func CreateAgentSession(c *gin.Context) {
 		for _, message := range respMessage {
 			if message.Text != "" {
 				fmt.Println("Assistant: " + message.Text)
+				event := AgentSessionEvent{
+					Type: AgentSessionEventText,
+					Role: RoleAssistant,
+					Text: message.Text,
+				}
+
+				err := conn.WriteJSON(event)
+				if err != nil {
+					return
+				}
+
 			} else if message.ToolUse != nil {
 				inputJson, _ := json.MarshalIndent(message.ToolUse.Input, "", "  ")
 				fmt.Println(fmt.Sprintf("Assistant: ToolUse: ID: %s, Name: %s, Input: %s", message.ToolUse.ID, message.ToolUse.Name, string(inputJson)))
+				event := AgentSessionEvent{
+					Type: AgentSessionEventToolUse,
+					Role: RoleAssistant,
+					ToolUse: &ToolUse{
+						ID:    message.ToolUse.ID,
+						Name:  message.ToolUse.Name,
+						Input: message.ToolUse.Input,
+					},
+				}
+
+				err := conn.WriteJSON(event)
+				if err != nil {
+					return
+				}
 			}
 		}
 		// add the llm resp to conversation history
@@ -146,6 +215,21 @@ func CreateAgentSession(c *gin.Context) {
 						Content:  toolResp,
 					}
 				}
+				event := AgentSessionEvent{
+					Type: AgentSessionEventToolResult,
+					Role: RoleAssistant,
+					ToolResult: &ToolResult{
+						ID:       block.ToolUse.ID,
+						ToolName: block.ToolUse.Name,
+						Content:  toolResp,
+						IsError:  toolResult.IsError,
+					},
+				}
+
+				err := conn.WriteJSON(event)
+				if err != nil {
+					return
+				}
 
 				inputMessages = append(inputMessages, llm.Message{
 					Type:       llm.MessageTypeToolResult,
@@ -161,7 +245,16 @@ func CreateAgentSession(c *gin.Context) {
 		}
 
 	}
-	result := fmt.Sprintf("Agent: Session Inference cost: $%f, time: %s", md.Cost, md.Time)
+	result := fmt.Sprintf("Agent Session Ended: Session Inference cost: $%f, time: %s", md.Cost, md.Time)
 	fmt.Println(result)
-	c.JSON(http.StatusOK, gin.H{"msg": result})
+	event = AgentSessionEvent{
+		Type: AgentSessionEventText,
+		Role: RoleAgent,
+		Text: result,
+	}
+
+	err = conn.WriteJSON(event)
+	if err != nil {
+		return
+	}
 }

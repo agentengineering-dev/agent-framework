@@ -34,6 +34,7 @@ type Message struct {
 type Role string
 
 const (
+	RoleAgent     Role = "agent"
 	RoleUser      Role = "user"
 	RoleAssistant Role = "assistant"
 )

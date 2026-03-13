@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Agent Chat</title>
+
+    <style>
+        body{
+            font-family:system-ui;
+            background:#f3f3f3;
+            margin:0;
+            height:100vh;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+        }
+
+        #app{
+            width:720px;
+            height:90vh;
+            background:white;
+            border-radius:10px;
+            display:flex;
+            flex-direction:column;
+            box-shadow:0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        #controls{
+            padding:15px;
+            border-bottom:1px solid #eee;
+        }
+
+        textarea{
+            width:100%;
+            height:60px;
+            margin-bottom:8px;
+        }
+
+        input{
+            width:100%;
+            margin-bottom:8px;
+            padding:6px;
+        }
+
+        button{
+            padding:8px 14px;
+        }
+
+        #messages{
+            flex:1;
+            overflow-y:auto;
+            padding:20px;
+        }
+
+        .message{
+            margin-bottom:14px;
+            display:flex;
+        }
+
+        .message.user{
+            justify-content:flex-end;
+        }
+
+        .bubble{
+            padding:10px 14px;
+            border-radius:8px;
+            max-width:70%;
+            white-space:pre-wrap;
+        }
+
+        .user .bubble{
+            background:#ececec;
+            color:white;
+        }
+
+        .assistant .bubble{
+            background:#ececec;
+        }
+
+        .agent .bubble{
+            background:#ececec;
+        }
+
+        .tool{
+            font-family:monospace;
+            background: #ececec;
+            color:black;
+            padding:8px;
+            border-radius:6px;
+            margin:8px 0;
+        }
+
+        .tool.error{
+            color:#ff4d4d;
+        }
+
+        #status{
+            font-size:12px;
+            padding:6px 10px;
+            border-top:1px solid #eee;
+            background:#fafafa;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="app">
+
+    <div id="controls">
+
+        <textarea id="goal" placeholder="Goal"></textarea>
+
+        <input id="provider" placeholder="Provider (openai, anthropic, etc)">
+
+        <button id="send">Start Agent</button>
+
+    </div>
+
+    <div id="messages"></div>
+
+    <div id="status">idle</div>
+
+</div>
+
+<script>
+
+    let ws = null
+
+    const messages = document.getElementById("messages")
+    const status = document.getElementById("status")
+
+    function scrollBottom(){
+        messages.scrollTop = messages.scrollHeight
+    }
+
+    function addMessage(role,text){
+
+        const wrapper = document.createElement("div")
+        wrapper.className = "message " + role
+
+        const bubble = document.createElement("div")
+        bubble.className = "bubble"
+        bubble.textContent = role + "\n" + text
+        bubble.style.whiteSpace = "pre-line";
+
+        wrapper.appendChild(bubble)
+        messages.appendChild(wrapper)
+
+        scrollBottom()
+    }
+
+    function addToolUse(tool){
+
+        const div = document.createElement("div")
+        div.className = "tool"
+        div.style.whiteSpace = "pre-line";
+        div.textContent =
+            `tool_use\n
+name: ${tool.name}\n
+id: ${tool.id}\n
+
+input:\n
+${JSON.stringify(tool.input,null,2)}`
+
+        messages.appendChild(div)
+        scrollBottom()
+    }
+
+    function addToolResult(result){
+
+        const div = document.createElement("div")
+        div.className = "tool"
+
+        if(result.isError) div.classList.add("error")
+
+        div.style.whiteSpace = "pre-line";
+
+        div.textContent =
+            `tool_result\n
+tool: ${result.toolName}\n
+id: ${result.id}\n
+
+output:\n
+${result.content}`
+
+        messages.appendChild(div)
+        scrollBottom()
+    }
+
+    function handleEvent(evt){
+
+        switch(evt.type){
+
+            case "text":
+                addMessage(evt.role, evt.text)
+                break
+
+            case "tool_use":
+                console.log(evt)
+                console.log(evt.tool_use)
+                if(evt.tool_use) addToolUse(evt.tool_use)
+                break
+
+            case "tool_result":
+                console.log(evt.tool_result)
+                if(evt.tool_result) addToolResult(evt.tool_result)
+                break
+        }
+    }
+
+    function connect(goal,provider){
+
+        messages.innerHTML = ""
+
+        const endpoint = `ws://${location.host}/create-session`
+
+        ws = new WebSocket(endpoint)
+
+        ws.onopen = () => {
+
+            status.textContent = "connected"
+
+            const payload = {
+                goal: goal,
+                provider: provider
+            }
+
+            ws.send(JSON.stringify(payload))
+        }
+
+        ws.onmessage = (msg)=>{
+
+            try{
+                const event = JSON.parse(msg.data)
+                handleEvent(event)
+            }catch(err){
+                console.error(err)
+            }
+        }
+
+        ws.onclose = ()=>{
+            status.textContent = "connection closed"
+        }
+
+        ws.onerror = ()=>{
+            status.textContent = "connection error"
+        }
+    }
+
+    document.getElementById("send").onclick = ()=>{
+
+        const goal = document.getElementById("goal").value
+        const provider = document.getElementById("provider").value
+
+        if(!goal || !provider){
+            alert("goal and provider required")
+            return
+        }
+
+        addMessage("user",goal)
+
+        connect(goal,provider)
+    }
+
+</script>
+
+</body>
+</html>
