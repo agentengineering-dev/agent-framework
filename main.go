@@ -39,6 +39,10 @@ func main() {
 
 	r.StaticFS("/ui", http.FS(staticFS))
 
+	r.GET("/project", func(c *gin.Context) {
+		c.File("./.af/map.json")
+	})
+
 	// Define a simple GET endpoint
 	r.GET("/create-session", func(c *gin.Context) {
 		// Return JSON response

@@ -1,0 +1,193 @@
+{
+  "name": ".",
+  "type": "directory",
+  "children": [
+    {
+      "name": ".gitignore",
+      "type": "file",
+      "tokens": 1
+    },
+    {
+      "name": "LICENSE.txt",
+      "type": "file",
+      "tokens": 201
+    },
+    {
+      "name": "Makefile",
+      "type": "file",
+      "tokens": 13
+    },
+    {
+      "name": "README.md",
+      "type": "file",
+      "tokens": 293
+    },
+    {
+      "name": "TODO.md",
+      "type": "file",
+      "tokens": 121
+    },
+    {
+      "name": "agent",
+      "type": "directory",
+      "children": [
+        {
+          "name": "helpers.go",
+          "type": "file",
+          "tokens": 62
+        },
+        {
+          "name": "session.go",
+          "type": "file",
+          "tokens": 1724
+        },
+        {
+          "name": "types.go",
+          "type": "file",
+          "tokens": 382
+        }
+      ]
+    },
+    {
+      "name": "control_plane",
+      "type": "directory",
+      "children": [
+        {
+          "name": "chat.html",
+          "type": "file",
+          "tokens": 1620
+        },
+        {
+          "name": "index.html",
+          "type": "file"
+        }
+      ]
+    },
+    {
+      "name": "git_helpers",
+      "type": "directory",
+      "children": [
+        {
+          "name": "git.go",
+          "type": "file",
+          "tokens": 883
+        }
+      ]
+    },
+    {
+      "name": "go.mod",
+      "type": "file",
+      "tokens": 1037
+    },
+    {
+      "name": "go.sum",
+      "type": "file",
+      "tokens": 7344
+    },
+    {
+      "name": "legibility",
+      "type": "directory",
+      "children": [
+        {
+          "name": "helper.go",
+          "type": "file",
+          "tokens": 857
+        }
+      ]
+    },
+    {
+      "name": "llm",
+      "type": "directory",
+      "children": [
+        {
+          "name": "anthropic.go",
+          "type": "file",
+          "tokens": 1888
+        },
+        {
+          "name": "deepseek.go",
+          "type": "file",
+          "tokens": 1308
+        },
+        {
+          "name": "google.go",
+          "type": "file",
+          "tokens": 2101
+        },
+        {
+          "name": "llm.go",
+          "type": "file",
+          "tokens": 139
+        },
+        {
+          "name": "models.go",
+          "type": "file",
+          "tokens": 2141
+        },
+        {
+          "name": "ollama.go",
+          "type": "file",
+          "tokens": 2077
+        },
+        {
+          "name": "openai.go",
+          "type": "file",
+          "tokens": 2028
+        },
+        {
+          "name": "type.go",
+          "type": "file",
+          "tokens": 341
+        }
+      ]
+    },
+    {
+      "name": "main.go",
+      "type": "file",
+      "tokens": 313
+    },
+    {
+      "name": "roadmap.excalidraw",
+      "type": "file",
+      "tokens": 57663
+    },
+    {
+      "name": "tool",
+      "type": "directory",
+      "children": [
+        {
+          "name": "filesystem.go",
+          "type": "file",
+          "tokens": 2309,
+          "regions": [
+            {
+              "name": "imports",
+              "tokens": 24
+            },
+            {
+              "name": "list_files",
+              "tokens": 72
+            },
+            {
+              "name": "read_file",
+              "tokens": 63
+            },
+            {
+              "name": "write_file",
+              "tokens": 120
+            },
+            {
+              "name": "edit_file",
+              "tokens": 382
+            }
+          ]
+        },
+        {
+          "name": "tool.go",
+          "type": "file",
+          "tokens": 137
+        }
+      ]
+    }
+  ]
+}
