@@ -1,6 +1,7 @@
 {
-  "name": ".",
+  "name": "agent-framework",
   "type": "directory",
+  "tokens": 88537,
   "children": [
     {
       "name": ".gitignore",
@@ -25,11 +26,12 @@
     {
       "name": "TODO.md",
       "type": "file",
-      "tokens": 121
+      "tokens": 12
     },
     {
       "name": "agent",
       "type": "directory",
+      "tokens": 2168,
       "children": [
         {
           "name": "helpers.go",
@@ -51,6 +53,7 @@
     {
       "name": "control_plane",
       "type": "directory",
+      "tokens": 2337,
       "children": [
         {
           "name": "chat.html",
@@ -59,13 +62,15 @@
         },
         {
           "name": "index.html",
-          "type": "file"
+          "type": "file",
+          "tokens": 717
         }
       ]
     },
     {
       "name": "git_helpers",
       "type": "directory",
+      "tokens": 883,
       "children": [
         {
           "name": "git.go",
@@ -87,17 +92,19 @@
     {
       "name": "legibility",
       "type": "directory",
+      "tokens": 969,
       "children": [
         {
           "name": "helper.go",
           "type": "file",
-          "tokens": 857
+          "tokens": 969
         }
       ]
     },
     {
       "name": "llm",
       "type": "directory",
+      "tokens": 12023,
       "children": [
         {
           "name": "anthropic.go",
@@ -144,41 +151,42 @@
     {
       "name": "main.go",
       "type": "file",
-      "tokens": 313
+      "tokens": 335
     },
     {
       "name": "roadmap.excalidraw",
       "type": "file",
-      "tokens": 57663
+      "tokens": 58478
     },
     {
       "name": "tool",
       "type": "directory",
+      "tokens": 2443,
       "children": [
         {
           "name": "filesystem.go",
           "type": "file",
-          "tokens": 2309,
+          "tokens": 2306,
           "regions": [
             {
               "name": "imports",
-              "tokens": 24
+              "tokens": 83
             },
             {
               "name": "list_files",
-              "tokens": 72
+              "tokens": 247
             },
             {
               "name": "read_file",
-              "tokens": 63
+              "tokens": 216
             },
             {
               "name": "write_file",
-              "tokens": 120
+              "tokens": 410
             },
             {
               "name": "edit_file",
-              "tokens": 382
+              "tokens": 1298
             }
           ]
         },

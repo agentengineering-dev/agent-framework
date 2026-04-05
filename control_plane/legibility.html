@@ -12,10 +12,15 @@
 
         ul {
             list-style-type: none;
-            padding-left: 18px;
+            padding-left: 16px;
+            margin: 2px 0;
         }
 
-        .folder > span {
+        li {
+            line-height: 1.4em;
+        }
+
+        .folder {
             font-weight: bold;
             cursor: pointer;
         }
@@ -32,13 +37,18 @@
         .hidden {
             display: none;
         }
-    </style>
 
+        .tokens {
+            color: #999;
+            font-size: 0.85em;
+            margin-left: 6px;
+        }
+
+    </style>
 </head>
 
 <body>
 
-<h2>Project Structure</h2>
 
 <div id="tree"></div>
 
@@ -55,53 +65,74 @@
     function renderNode(node) {
         const li = document.createElement("li")
 
-        if (node.type === "directory") {
+        const label = document.createElement("span")
 
-            const span = document.createElement("span")
-            span.textContent = "📁 " + node.name
-            span.className = "folder"
+        let prefix = ""
 
-            const children = document.createElement("ul")
-
-            if (node.children) {
-                node.children.forEach(child => {
-                    children.appendChild(renderNode(child))
-                })
-            }
-
-            span.onclick = () => {
-                children.classList.toggle("hidden")
-            }
-
-            li.appendChild(span)
-            li.appendChild(children)
-
-        } else if (node.type === "file") {
-
-            const span = document.createElement("span")
-            span.className = "file"
-            span.textContent = `📄 ${node.name} (${node.tokens} tokens)`
-            li.appendChild(span)
-
-            if (node.regions && node.regions.length > 0) {
-
-                const ul = document.createElement("ul")
-
-                node.regions.forEach(r => {
-                    const region = document.createElement("li")
-                    region.className = "region"
-                    region.textContent = `🔹 ${r.name} (${r.tokens} tokens)`
-                    ul.appendChild(region)
-                })
-
-                li.appendChild(ul)
-            }
+        if (node.tokens) {
+            prefix = `(${node.tokens}) `
         }
 
-        const wrapper = document.createElement("ul")
-        wrapper.appendChild(li)
+        if (node.type === "directory") {
+            label.textContent = `${prefix}📁 ${node.name}`
+            label.className = "folder"
+        } else {
+            label.textContent = `${prefix}📄 ${node.name}`
+            label.className = "file"
+        }
 
-        return wrapper
+       
+
+        li.appendChild(label)
+
+        // children
+        if (node.children && node.children.length > 0) {
+            const ul = document.createElement("ul")
+
+            // folders first, then files
+            node.children.sort((a, b) => {
+                if (a.type === b.type) return a.name.localeCompare(b.name)
+                return a.type === "directory" ? -1 : 1
+            })
+
+            node.children.forEach(child => {
+                ul.appendChild(renderNode(child))
+            })
+
+            label.onclick = () => {
+                ul.classList.toggle("hidden")
+            }
+
+            li.appendChild(ul)
+        }
+
+        // regions (unchanged, just slightly cleaner)
+        if (node.regions && node.regions.length > 0) {
+            const ul = document.createElement("ul")
+
+            node.regions.forEach(r => {
+                const region = document.createElement("li")
+                region.className = "region"
+                region.textContent = `🔹 ${r.name} (${r.tokens})`
+                ul.appendChild(region)
+            })
+
+            li.appendChild(ul)
+        }
+
+        return li
+    }
+
+    function expandAll() {
+        document.querySelectorAll("ul").forEach(ul => {
+            ul.classList.remove("hidden")
+        })
+    }
+
+    function collapseAll() {
+        document.querySelectorAll("#tree > ul > li > ul").forEach(ul => {
+            ul.classList.add("hidden")
+        })
     }
 
     loadProject()

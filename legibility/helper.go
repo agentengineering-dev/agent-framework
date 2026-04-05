@@ -53,7 +53,6 @@ func analyzeFile(path string) ([]Region, int, error) {
 
 		if strings.HasPrefix(trim, "// endregion") {
 			if current != nil {
-				current.Tokens = int(float64(current.Tokens) / TokenToCharRatio)
 				regions = append(regions, *current)
 				current = nil
 			}
@@ -65,38 +64,44 @@ func analyzeFile(path string) ([]Region, int, error) {
 		}
 	}
 
-	if !hasRegion {
-		return nil, int(float64(totalChars) / TokenToCharRatio), nil
-	}
-
+	// convert region char counts → tokens
 	for i := range regions {
 		regions[i].Tokens = int(float64(regions[i].Tokens) / TokenToCharRatio)
+	}
+
+	// if no regions, return total tokens only
+	if !hasRegion {
+		return nil, int(float64(totalChars) / TokenToCharRatio), nil
 	}
 
 	return regions, int(float64(totalChars) / TokenToCharRatio), nil
 }
 
 func buildTree(root string) (*Node, error) {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return nil, err
+	}
+
 	rootNode := &Node{
-		Name: filepath.Base(root),
+		Name: filepath.Base(absRoot),
 		Type: "directory",
 	}
 
 	nodeMap := map[string]*Node{
-		root: rootNode,
+		absRoot: rootNode,
 	}
 
-	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-
+	err = filepath.Walk(absRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		if path == root {
+		if path == absRoot {
 			return nil
 		}
 
-		// skip hidden dirs
+		// skip hidden directories
 		if info.IsDir() && strings.HasPrefix(info.Name(), ".") {
 			return filepath.SkipDir
 		}
@@ -135,14 +140,28 @@ func buildTree(root string) (*Node, error) {
 	return rootNode, nil
 }
 
-func main() {
+// aggregate tokens recursively for directories
+func aggregateTokens(node *Node) int {
+	total := node.Tokens
 
+	for _, child := range node.Children {
+		total += aggregateTokens(child)
+	}
+
+	node.Tokens = total
+	return total
+}
+
+func main() {
 	root := "."
 
 	tree, err := buildTree(root)
 	if err != nil {
 		panic(err)
 	}
+
+	// compute folder totals
+	aggregateTokens(tree)
 
 	err = os.MkdirAll(".af", 0755)
 	if err != nil {
