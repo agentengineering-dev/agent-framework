@@ -1,0 +1,1 @@
+analyze: go run legibility/helper.go // fixme

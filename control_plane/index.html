@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Project Map</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        ul {
+            list-style-type: none;
+            padding-left: 18px;
+        }
+
+        .folder > span {
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .file {
+            color: #333;
+        }
+
+        .region {
+            color: #777;
+            font-size: 0.9em;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+
+</head>
+
+<body>
+
+<h2>Project Structure</h2>
+
+<div id="tree"></div>
+
+<script>
+
+    async function loadProject() {
+        const res = await fetch("/project")
+        const data = await res.json()
+
+        const root = document.getElementById("tree")
+        root.appendChild(renderNode(data))
+    }
+
+    function renderNode(node) {
+        const li = document.createElement("li")
+
+        if (node.type === "directory") {
+
+            const span = document.createElement("span")
+            span.textContent = "📁 " + node.name
+            span.className = "folder"
+
+            const children = document.createElement("ul")
+
+            if (node.children) {
+                node.children.forEach(child => {
+                    children.appendChild(renderNode(child))
+                })
+            }
+
+            span.onclick = () => {
+                children.classList.toggle("hidden")
+            }
+
+            li.appendChild(span)
+            li.appendChild(children)
+
+        } else if (node.type === "file") {
+
+            const span = document.createElement("span")
+            span.className = "file"
+            span.textContent = `📄 ${node.name} (${node.tokens} tokens)`
+            li.appendChild(span)
+
+            if (node.regions && node.regions.length > 0) {
+
+                const ul = document.createElement("ul")
+
+                node.regions.forEach(r => {
+                    const region = document.createElement("li")
+                    region.className = "region"
+                    region.textContent = `🔹 ${r.name} (${r.tokens} tokens)`
+                    ul.appendChild(region)
+                })
+
+                li.appendChild(ul)
+            }
+        }
+
+        const wrapper = document.createElement("ul")
+        wrapper.appendChild(li)
+
+        return wrapper
+    }
+
+    loadProject()
+
+</script>
+
+</body>
+</html>

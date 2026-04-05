@@ -1,4 +1,4 @@
-agent-frame
+agent-framework
 Copyright (C) 2025  Praveen Sanap
 
 This program is free software: you can redistribute it and/or modify
