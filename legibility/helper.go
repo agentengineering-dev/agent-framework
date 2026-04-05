@@ -11,8 +11,9 @@ import (
 const TokenToCharRatio float64 = 3.4
 
 type Region struct {
-	Name   string `json:"name"`
-	Tokens int    `json:"tokens"`
+	Name          string `json:"name"`
+	Tokens        int    `json:"tokens"`
+	Documentation string `json:"documentation,omitempty"` // new field for region documentation
 }
 
 type Node struct {
@@ -36,6 +37,7 @@ func analyzeFile(path string) ([]Region, int, error) {
 	var current *Region
 	totalChars := 0
 	hasRegion := false
+	inDocBlock := false
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -44,23 +46,63 @@ func analyzeFile(path string) ([]Region, int, error) {
 
 		trim := strings.TrimSpace(line)
 
+		// start new region
 		if strings.HasPrefix(trim, "// region") {
 			name := strings.TrimSpace(strings.TrimPrefix(trim, "// region"))
 			current = &Region{Name: name}
 			hasRegion = true
+			inDocBlock = false
 			continue
 		}
 
+		// end region
 		if strings.HasPrefix(trim, "// endregion") {
 			if current != nil {
 				regions = append(regions, *current)
 				current = nil
 			}
+			inDocBlock = false
 			continue
 		}
 
 		if current != nil {
 			current.Tokens += lineChars
+
+			// detect start of doc block immediately after // region
+			if !inDocBlock && strings.HasPrefix(trim, "/*") {
+				inDocBlock = true
+				docLine := strings.TrimPrefix(trim, "/*")
+				docLine = strings.TrimSpace(docLine)
+				if docLine != "" {
+					current.Documentation = docLine
+				}
+				continue
+			}
+
+			// inside doc block
+			if inDocBlock {
+				if strings.Contains(trim, "*/") {
+					// end of doc block
+					docLine := strings.TrimSuffix(trim, "*/")
+					docLine = strings.TrimSpace(docLine)
+					if docLine != "" {
+						if current.Documentation != "" {
+							current.Documentation += "\n" + docLine
+						} else {
+							current.Documentation = docLine
+						}
+					}
+					inDocBlock = false
+				} else {
+					// middle of doc block
+					if current.Documentation != "" {
+						current.Documentation += "\n" + trim
+					} else {
+						current.Documentation = trim
+					}
+				}
+				continue
+			}
 		}
 	}
 
@@ -69,7 +111,6 @@ func analyzeFile(path string) ([]Region, int, error) {
 		regions[i].Tokens = int(float64(regions[i].Tokens) / TokenToCharRatio)
 	}
 
-	// if no regions, return total tokens only
 	if !hasRegion {
 		return nil, int(float64(totalChars) / TokenToCharRatio), nil
 	}

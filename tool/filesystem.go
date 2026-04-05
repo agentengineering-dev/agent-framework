@@ -1,4 +1,9 @@
 // region imports
+/*
+Imports standard libraries for file handling, JSON, strings, and random bytes,
+third-party library for generating diffs,
+and internal packages for git operations and agent tool integration.
+*/
 package tool
 
 import (
@@ -18,6 +23,10 @@ import (
 // endregion
 
 // region list_files
+/*
+Defines a tool that lists all files and directories in a given path.
+Returns a newline-separated string, appending "/" to directory names.
+*/
 var ListFilesToolDefinition = llm.ToolDefinition{
 	Name:                "list_files",
 	Description:         "Returns a list of files in the given directory.",
@@ -55,6 +64,10 @@ var ListFileImpl = func(message json.RawMessage) (string, error) {
 // endregion
 
 // region read_file
+/*
+Defines a tool that reads the contents of a specified file,
+blocks reading sensitive files like ".env", and returns the content as a string.
+*/
 var ReadFileToolDefinition = llm.ToolDefinition{
 	Name:                "read_file",
 	Description:         "Reads a file of the given path.",
@@ -86,7 +99,10 @@ var ReadFileImpl = func(message json.RawMessage) (string, error) {
 // endregion
 
 // region write_file
-
+/*
+Defines a tool that writes content to a specified file, creating directories if needed,
+and commits the change to git with a provided commit message.
+*/
 var WriteFileToolDefinition = llm.ToolDefinition{
 	Name:                "write_file",
 	Description:         "Writes a file of the given path relative to the root project directory.",
@@ -133,6 +149,11 @@ func WriteFileImpl(message json.RawMessage) (string, error) {
 // endregion
 
 // region edit_file
+/*
+Defines a tool that edits a file by replacing text via exact or fuzzy matching,
+preserves indentation, generates a unified diff, supports dry runs,
+and safely writes changes to disk.
+*/
 var EditFileDefinition = llm.ToolDefinition{
 	Name: "edit_file",
 	Description: `Make edit to a text file.

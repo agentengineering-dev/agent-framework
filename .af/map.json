@@ -1,7 +1,7 @@
 {
   "name": "agent-framework",
   "type": "directory",
-  "tokens": 88537,
+  "tokens": 89573,
   "children": [
     {
       "name": ".gitignore",
@@ -29,6 +29,11 @@
       "tokens": 12
     },
     {
+      "name": "WAY-OF-WORK.md",
+      "type": "file",
+      "tokens": 66
+    },
+    {
       "name": "agent",
       "type": "directory",
       "tokens": 2168,
@@ -53,7 +58,7 @@
     {
       "name": "control_plane",
       "type": "directory",
-      "tokens": 2337,
+      "tokens": 2649,
       "children": [
         {
           "name": "chat.html",
@@ -61,9 +66,9 @@
           "tokens": 1620
         },
         {
-          "name": "index.html",
+          "name": "legibility.html",
           "type": "file",
-          "tokens": 717
+          "tokens": 1029
         }
       ]
     },
@@ -92,12 +97,17 @@
     {
       "name": "legibility",
       "type": "directory",
-      "tokens": 969,
+      "tokens": 1382,
       "children": [
+        {
+          "name": "documentation.go",
+          "type": "file",
+          "tokens": 97
+        },
         {
           "name": "helper.go",
           "type": "file",
-          "tokens": 969
+          "tokens": 1285
         }
       ]
     },
@@ -161,32 +171,37 @@
     {
       "name": "tool",
       "type": "directory",
-      "tokens": 2443,
+      "tokens": 2688,
       "children": [
         {
           "name": "filesystem.go",
           "type": "file",
-          "tokens": 2306,
+          "tokens": 2551,
           "regions": [
             {
               "name": "imports",
-              "tokens": 83
+              "tokens": 141,
+              "documentation": "Imports standard libraries for file handling, JSON, strings, and random bytes,\nthird-party library for generating diffs,\nand internal packages for git operations and agent tool integration."
             },
             {
               "name": "list_files",
-              "tokens": 247
+              "tokens": 290,
+              "documentation": "Defines a tool that lists all files and directories in a given path.\nReturns a newline-separated string, appending \"/\" to directory names."
             },
             {
               "name": "read_file",
-              "tokens": 216
+              "tokens": 259,
+              "documentation": "Defines a tool that reads the contents of a specified file,\nblocks reading sensitive files like \".env\", and returns the content as a string."
             },
             {
               "name": "write_file",
-              "tokens": 410
+              "tokens": 455,
+              "documentation": "Defines a tool that writes content to a specified file, creating directories if needed,\nand commits the change to git with a provided commit message."
             },
             {
               "name": "edit_file",
-              "tokens": 1298
+              "tokens": 1354,
+              "documentation": "Defines a tool that edits a file by replacing text via exact or fuzzy matching,\npreserves indentation, generates a unified diff, supports dry runs,\nand safely writes changes to disk."
             }
           ]
         },

@@ -32,6 +32,7 @@
         .region {
             color: #777;
             font-size: 0.9em;
+            cursor: pointer;
         }
 
         .hidden {
@@ -44,10 +45,19 @@
             margin-left: 6px;
         }
 
+        .documentation {
+            font-size: 0.85em;
+            color: #555;
+            padding-left: 12px;
+            margin: 2px 0 4px 0;
+            border-left: 2px solid #ccc;
+        }
+
     </style>
 </head>
 
 <body>
+
 
 
 <div id="tree"></div>
@@ -80,7 +90,6 @@
         const label = document.createElement("span")
 
         let prefix = ""
-
         if (node.tokens) {
             prefix = `(${humanReadableNumber(node.tokens)}) `
         }
@@ -92,8 +101,6 @@
             label.textContent = `📄 ${node.name} ${prefix}`
             label.className = "file"
         }
-
-
 
         li.appendChild(label)
 
@@ -118,7 +125,7 @@
             li.appendChild(ul)
         }
 
-        // regions (unchanged, just slightly cleaner)
+        // regions with collapsible documentation
         if (node.regions && node.regions.length > 0) {
             const ul = document.createElement("ul")
 
@@ -126,7 +133,22 @@
                 const region = document.createElement("li")
                 region.className = "region"
                 region.textContent = `🔹 ${r.name} (${r.tokens})`
+
                 ul.appendChild(region)
+
+                // add documentation if available
+                if (r.documentation) {
+                    const doc = document.createElement("div")
+                    doc.className = "documentation hidden"
+                    doc.textContent = r.documentation
+                    region.appendChild(doc)
+
+                    // toggle doc visibility on click
+                    region.onclick = (e) => {
+                        e.stopPropagation() // prevent collapsing folder
+                        doc.classList.toggle("hidden")
+                    }
+                }
             })
 
             li.appendChild(ul)
