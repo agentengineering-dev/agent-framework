@@ -62,6 +62,18 @@
         root.appendChild(renderNode(data))
     }
 
+    function humanReadableNumber(num) {
+        if (num < 1000) {
+            return num.toString();
+        } else if (num < 1_000_000) {
+            return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+        } else if (num < 1_000_000_000) {
+            return (num / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+        } else {
+            return (num / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'B';
+        }
+    }
+
     function renderNode(node) {
         const li = document.createElement("li")
 
@@ -70,18 +82,18 @@
         let prefix = ""
 
         if (node.tokens) {
-            prefix = `(${node.tokens}) `
+            prefix = `(${humanReadableNumber(node.tokens)}) `
         }
 
         if (node.type === "directory") {
-            label.textContent = `${prefix}📁 ${node.name}`
+            label.textContent = `📁 ${node.name} ${prefix}`
             label.className = "folder"
         } else {
-            label.textContent = `${prefix}📄 ${node.name}`
+            label.textContent = `📄 ${node.name} ${prefix}`
             label.className = "file"
         }
 
-       
+
 
         li.appendChild(label)
 
