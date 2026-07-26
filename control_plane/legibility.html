@@ -1,13 +1,42 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <!-- region head -->
+    <!--
+    Contains metadata, page title, and CSS styles for layout and tree rendering.
+    -->
     <meta charset="UTF-8">
     <title>Project Map</title>
 
     <style>
+        /* region styles */
+        /*
+        Styles define layout: left tree pane, right content pane,
+        typography, folder/file appearance, collapsible regions, and controls.
+        */
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+        }
+
+        #tree-pane {
+            width: 20%;
+            min-width: 200px;
+            max-width: 300px;
+            border-right: 1px solid #ccc;
+            padding: 20px;
+            overflow-y: auto;
+            box-sizing: border-box;
+            word-wrap: break-word;
+        }
+
+        #content-pane {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            box-sizing: border-box;
         }
 
         ul {
@@ -18,6 +47,7 @@
 
         li {
             line-height: 1.4em;
+            word-wrap: break-word;
         }
 
         .folder {
@@ -51,19 +81,53 @@
             padding-left: 12px;
             margin: 2px 0 4px 0;
             border-left: 2px solid #ccc;
+            word-wrap: break-word;
         }
 
+        .controls {
+            margin-bottom: 12px;
+        }
+
+        .controls button {
+            margin-right: 8px;
+            padding: 4px 10px;
+            font-size: 0.9em;
+            cursor: pointer;
+        }
+        /* endregion styles */
     </style>
+    <!-- endregion head -->
 </head>
 
 <body>
+<!-- region left_pane -->
+<!--
+Left pane contains folder tree and control buttons for expanding/collapsing folders.
+-->
+<div id="tree-pane">
+    <div class="controls">
+        <button onclick="expandAllFolders()">📂 🡫</button>
+        <button onclick="collapseAllFolders()">📁🡩</button>
+    </div>
+    <div id="tree"></div>
+</div>
+<!-- endregion left_pane -->
 
+<!-- region right_pane -->
+<!--
+Right pane reserved for optional content display.
+-->
+<div id="content-pane">
+    <!-- Optional content here -->
+</div>
+<!-- endregion right_pane -->
 
-
-<div id="tree"></div>
-
+<!-- region scripts -->
+<!--
+Contains JavaScript for fetching project data, rendering tree, formatting numbers,
+handling collapsible folders, regions, and documentation.
+-->
 <script>
-
     async function loadProject() {
         const res = await fetch("/project")
         const data = await res.json()
@@ -72,6 +136,10 @@
         root.appendChild(renderNode(data))
     }
 
+    // region helpers
+    /*
+    Helper functions: humanReadableNumber converts tokens to K/M/B format.
+    */
     function humanReadableNumber(num) {
         if (num < 1000) {
             return num.toString();
@@ -83,12 +151,15 @@
             return (num / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'B';
         }
     }
+    // endregion helpers
 
+    // region render_node
+    /*
+    Renders a tree node recursively, handling folders, files, and regions with documentation.
+    */
     function renderNode(node) {
         const li = document.createElement("li")
-
         const label = document.createElement("span")
-
         let prefix = ""
         if (node.tokens) {
             prefix = `(${humanReadableNumber(node.tokens)}) `
@@ -104,74 +175,74 @@
 
         li.appendChild(label)
 
-        // children
         if (node.children && node.children.length > 0) {
             const ul = document.createElement("ul")
-
-            // folders first, then files
             node.children.sort((a, b) => {
                 if (a.type === b.type) return a.name.localeCompare(b.name)
                 return a.type === "directory" ? -1 : 1
             })
-
-            node.children.forEach(child => {
-                ul.appendChild(renderNode(child))
-            })
-
-            label.onclick = () => {
-                ul.classList.toggle("hidden")
-            }
-
+            node.children.forEach(child => ul.appendChild(renderNode(child)))
+            label.onclick = () => { ul.classList.toggle("hidden") }
             li.appendChild(ul)
         }
 
-        // regions with collapsible documentation
         if (node.regions && node.regions.length > 0) {
             const ul = document.createElement("ul")
-
             node.regions.forEach(r => {
                 const region = document.createElement("li")
                 region.className = "region"
                 region.textContent = `🔹 ${r.name} (${r.tokens})`
-
                 ul.appendChild(region)
 
-                // add documentation if available
                 if (r.documentation) {
                     const doc = document.createElement("div")
                     doc.className = "documentation hidden"
                     doc.textContent = r.documentation
                     region.appendChild(doc)
-
-                    // toggle doc visibility on click
                     region.onclick = (e) => {
-                        e.stopPropagation() // prevent collapsing folder
+                        e.stopPropagation()
                         doc.classList.toggle("hidden")
                     }
                 }
             })
-
             li.appendChild(ul)
         }
 
         return li
     }
+    // endregion render_node
 
-    function expandAll() {
-        document.querySelectorAll("ul").forEach(ul => {
-            ul.classList.remove("hidden")
+    // region controls
+    /*
+    Functions to expand/collapse all folders and documentation at once.
+    */
+    function expandAllFolders() {
+        document.querySelectorAll("#tree .folder").forEach(folder => {
+            const ul = folder.nextElementSibling
+            if (ul && ul.tagName === "UL") ul.classList.remove("hidden")
         })
+        expandAllDocs()
     }
 
-    function collapseAll() {
-        document.querySelectorAll("#tree > ul > li > ul").forEach(ul => {
-            ul.classList.add("hidden")
+    function collapseAllFolders() {
+        document.querySelectorAll("#tree .folder").forEach(folder => {
+            const ul = folder.nextElementSibling
+            if (ul && ul.tagName === "UL") ul.classList.add("hidden")
         })
+        collapseAllDocs()
     }
+
+    function expandAllDocs() {
+        document.querySelectorAll(".documentation").forEach(d => d.classList.remove("hidden"))
+    }
+
+    function collapseAllDocs() {
+        document.querySelectorAll(".documentation").forEach(d => d.classList.add("hidden"))
+    }
+    // endregion controls
 
     loadProject()
-
 </script>
-
+<!-- endregion scripts -->
 </body>
 </html>
