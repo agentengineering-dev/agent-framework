@@ -122,6 +122,10 @@ func CreateBranch(branchName string) error {
 }
 
 func AddAllAndCommit(message, authorName, authorEmail string) error {
+	if repo == nil {
+		return fmt.Errorf("git_helpers.Init() was not called")
+	}
+
 	// Get worktree
 	w, err := repo.Worktree()
 	if err != nil {

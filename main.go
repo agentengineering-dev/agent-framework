@@ -25,7 +25,7 @@ func main() {
 
 	err := godotenv.Load(envFileStr)
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal(err, "Error loading .env file")
 	}
 
 	// Create a Gin router with default middleware (logger and recovery)
@@ -48,6 +48,13 @@ func main() {
 		// Return JSON response
 
 		agent.CreateAgentSession(c)
+
+	})
+
+	// same agent loop, but on a branch of its own
+	r.GET("/create-git-session", func(c *gin.Context) {
+
+		agent.CreateGitAgentSession(c)
 
 	})
 

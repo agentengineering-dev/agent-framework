@@ -17,9 +17,19 @@ This project is an agent-framework for building code agents.
     OPENAI_API_KEY=your_openai_key
     ANTHROPIC_API_KEY=your_anthropic_key
     GOOGLE_API_KEY=your_google_key
+
+    # unsloth studio (self hosted, OpenAI compatible)
+    UNSLOTH_API_HOST=http://127.0.0.1:8888
+    UNSLOTH_API_KEY=your_unsloth_key
+    UNSLOTH_MODEL=unsloth/Qwen3.8-27B-GGUF
     ```
 
     *Note: You only need the key for the provider you intend to use.*
+
+    For `unsloth`, `UNSLOTH_API_HOST` defaults to `http://127.0.0.1:8888` and the
+    `/v1` suffix is added automatically. `UNSLOTH_API_KEY` is the key minted by
+    unsloth studio, and `UNSLOTH_MODEL` selects one of the models the studio has
+    loaded (`GET /v1/models` lists them).
 
 ### Usage
 
@@ -32,7 +42,7 @@ go run main.go -goal "Your goal here" -provider "provider_name"
 **Parameters:**
 
 -   `-goal`: Description of what you want the agent to do.
--   `-provider`: The LLM provider to use. Options: `openai`, `anthropic`, `google`.
+-   `-provider`: The LLM provider to use. Options: `openai`, `anthropic`, `google`, `deepseek`, `ollama`, `unsloth`.
 
 **Example:**
 

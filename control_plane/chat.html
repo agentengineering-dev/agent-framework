@@ -81,6 +81,15 @@
             background:#ececec;
         }
 
+        .title{
+            font-weight:600;
+            font-size:15px;
+            text-align:center;
+            padding:8px 0 14px 0;
+            border-bottom:1px solid #eee;
+            margin-bottom:14px;
+        }
+
         .tool{
             font-family:monospace;
             background: #ececec;
@@ -150,6 +159,16 @@
         scrollBottom()
     }
 
+    function addTitle(text){
+
+        const div = document.createElement("div")
+        div.className = "title"
+        div.textContent = text
+
+        messages.appendChild(div)
+        scrollBottom()
+    }
+
     function addToolUse(tool){
 
         const div = document.createElement("div")
@@ -194,6 +213,10 @@ ${result.content}`
 
             case "text":
                 addMessage(evt.role, evt.text)
+                break
+
+            case "title":
+                addTitle(evt.text)
                 break
 
             case "tool_use":
