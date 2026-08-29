@@ -100,8 +100,8 @@ var ReadFileImpl = func(message json.RawMessage) (string, error) {
 
 // region write_file
 /*
-Defines a tool that writes content to a specified file, creating directories if needed,
-and commits the change to git with a provided commit message.
+Defines a tool that writes content to a specified file, creating directories if needed.
+The git flavour of the tool also commits the change with a provided commit message.
 */
 var WriteFileToolDefinition = llm.ToolDefinition{
 	Name:                "write_file",
@@ -110,7 +110,19 @@ var WriteFileToolDefinition = llm.ToolDefinition{
 	Func:                WriteFileImpl,
 }
 
+var GitWriteFileToolDefinition = llm.ToolDefinition{
+	Name:                "write_file",
+	Description:         "Writes a file of the given path relative to the root project directory and commits it.",
+	InputSchemaInstance: GitWriteFileInput{},
+	Func:                GitWriteFileImpl,
+}
+
 type WriteFileInput struct {
+	Path    string `json:"path" jsonschema_description:"The path to the file relative to the root project directory."`
+	Content string `json:"content" jsonschema_description:"Content of the file"`
+}
+
+type GitWriteFileInput struct {
 	Path          string `json:"path" jsonschema_description:"The path to the file relative to the root project directory."`
 	Content       string `json:"content" jsonschema_description:"Content of the file"`
 	CommitMessage string `json:"commit_message" jsonschema_description:"Commit message of the file"`
@@ -121,8 +133,28 @@ func WriteFileImpl(message json.RawMessage) (string, error) {
 	if err := json.Unmarshal(message, &input); err != nil {
 		return "", err
 	}
-	path := input.Path
+	return writeFile(input.Path, input.Content)
+}
 
+func GitWriteFileImpl(message json.RawMessage) (string, error) {
+	var input GitWriteFileInput
+	if err := json.Unmarshal(message, &input); err != nil {
+		return "", err
+	}
+
+	result, err := writeFile(input.Path, input.Content)
+	if err != nil {
+		return "", err
+	}
+
+	err = git_helpers.AddAllAndCommit(input.CommitMessage, "agent-framework", "agent-framework@sanap.io")
+	if err != nil {
+		return "", fmt.Errorf("error write file: %w", err)
+	}
+	return result, nil
+}
+
+func writeFile(path string, content string) (string, error) {
 	err := os.MkdirAll(filepath.Dir(path), 0777)
 	if err != nil {
 		return "", fmt.Errorf("error creating directory: %w", err)
@@ -133,17 +165,12 @@ func WriteFileImpl(message json.RawMessage) (string, error) {
 	}
 
 	defer file.Close()
-	_, err = file.WriteString(input.Content)
+	_, err = file.WriteString(content)
 	if err != nil {
 		return "", fmt.Errorf("error writing file: %w", err)
 	}
 
-	err = git_helpers.AddAllAndCommit(input.CommitMessage, "agent-framework", "agent-framework@sanap.io")
-	if err != nil {
-		return "", fmt.Errorf("error write file: %w", err)
-	}
 	return "Successfully create file: " + file.Name(), nil
-
 }
 
 // endregion

@@ -12,6 +12,10 @@ type SessionMetadata struct {
 	BranchName  string `json:"branch_name" jsonschema_description:"The name of the branch"`
 }
 
+type SessionTitle struct {
+	Title string `json:"title" jsonschema_description:"A short title summarizing the session"`
+}
+
 type AgentSessionEvent struct {
 	Type       AgentSessionEventType `json:"type"`
 	Role       Role                  `json:"role"`
@@ -37,6 +41,7 @@ type AgentSessionEventType string
 
 const (
 	AgentSessionEventText       AgentSessionEventType = "text"
+	AgentSessionEventTitle      AgentSessionEventType = "title"
 	AgentSessionEventToolUse    AgentSessionEventType = "tool_use"
 	AgentSessionEventToolResult AgentSessionEventType = "tool_result"
 )

@@ -7,6 +7,7 @@ const PROVIDER_OPENAI = "openai"
 const PROVIDER_GOOGLE = "google"
 const PROVIDER_DEEPSEEK = "deepseek"
 const PROVIDER_OLLAMA = "ollama"
+const PROVIDER_UNSLOTH = "unsloth"
 
 const MODEL_ANTHOPIC_CLAUDE_OPUS_4_5 = "claude-opus-4-5"
 const MODEL_ANTHOPIC_CLAUDE_SONNET_4_5 = "claude-sonnet-4-5"
@@ -21,6 +22,9 @@ const MODEL_GOOGLE_GEMINI_3_FLASH = "gemini-3-flash"
 const MODEL_DEEPSEEK_CHAT = "deepseek-chat"
 const MODEL_DEEPSEEK_REASONER = "deepseek-reasoner"
 const MODEL_OLLAMA_QWEN3_CODER = "qwen3-coder"
+const MODEL_UNSLOTH_QWEN3_27B = "unsloth/Qwen3.8-27B-GGUF"
+
+const DEFAULT_UNSLOTH_API_HOST = "http://127.0.0.1:8888"
 
 type Model struct {
 	ModelID         string    `json:"model_id"`
@@ -226,6 +230,23 @@ var MODELS = map[string][]Model{
 			},
 			ContextWindow:   0,
 			MaxOutputTokens: 0,
+			KnowledgeCutoff: time.Time{},
+		},
+	},
+	PROVIDER_UNSLOTH: []Model{
+		{
+			ModelID:     MODEL_UNSLOTH_QWEN3_27B,
+			ModelAlias:  MODEL_UNSLOTH_QWEN3_27B,
+			Description: "Locally served model behind an unsloth studio OpenAI compatible endpoint",
+			Pricing: Pricing{
+				InputMTok:        0,
+				OutputMTok:       0,
+				CacheReadMTok:    0,
+				CacheWriteMTok:   0,
+				CacheWrite1HMTok: 0,
+			},
+			ContextWindow:   13312,
+			MaxOutputTokens: 13312,
 			KnowledgeCutoff: time.Time{},
 		},
 	},
