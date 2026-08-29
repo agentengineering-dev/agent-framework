@@ -3,7 +3,6 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/agentengineering.dev/agent-framework/llm"
 	"github.com/agentengineering.dev/agent-framework/tool"
@@ -61,24 +60,30 @@ func readSessionParams(conn *websocket.Conn) (*CreateAgentSessionParams, error) 
 }
 
 // runAgentLoop runs inference and executes the requested tools until the model
-// answers without asking for another tool. It returns the accumulated cost and
-// time of every inference it made.
-func runAgentLoop(conn *websocket.Conn, client llm.LLM, inputMessages []llm.Message, tools map[string]llm.ToolDefinition) (float64, time.Duration, error) {
-	cost := 0.0
-	totalTime := time.Duration(0)
+// answers without asking for another tool. Every inference is folded into the
+// usage tracker, which is what the ui reports context and throughput from.
+func runAgentLoop(conn *websocket.Conn, client llm.LLM, inputMessages []llm.Message, tools map[string]llm.ToolDefinition, usage *usageTracker) error {
 	toolDefs := toolDefinitions(tools)
 
 	for {
+		if err := sendStatus(conn, AgentStateInferring, "running inference"); err != nil {
+			return err
+		}
+
 		// run inference.
 		respMessage, md, err := client.RunInference(inputMessages, toolDefs)
 		if err != nil {
-			return cost, totalTime, err
+			// the provider may still have told us what the failed call cost,
+			// report it before giving up on the session.
+			_ = sendUsage(conn, usage, md)
+			return err
 		}
 
-		cost += md.Cost
-		totalTime += md.Time
+		if err := sendUsage(conn, usage, md); err != nil {
+			return err
+		}
 
-		fmt.Println(fmt.Sprintf("Agent: Loop Inference cost: $%f, time: %s", md.Cost, md.Time))
+		fmt.Println(fmt.Sprintf("Agent: Loop Inference cost: $%f, time: %s, context: %d tokens, %.1f tok/s", md.Cost, md.Time, md.ContextTokens(), md.TokensPerSecond()))
 
 		// print the response
 		for _, message := range respMessage {
@@ -86,7 +91,7 @@ func runAgentLoop(conn *websocket.Conn, client llm.LLM, inputMessages []llm.Mess
 				fmt.Println("Assistant: " + message.Text)
 				err := sendText(conn, RoleAssistant, message.Text)
 				if err != nil {
-					return cost, totalTime, err
+					return err
 				}
 			} else if message.ToolUse != nil {
 				inputJson, _ := json.MarshalIndent(message.ToolUse.Input, "", "  ")
@@ -101,7 +106,7 @@ func runAgentLoop(conn *websocket.Conn, client llm.LLM, inputMessages []llm.Mess
 					},
 				})
 				if err != nil {
-					return cost, totalTime, err
+					return err
 				}
 			}
 		}
@@ -117,6 +122,10 @@ func runAgentLoop(conn *websocket.Conn, client llm.LLM, inputMessages []llm.Mess
 			case llm.MessageTypeToolUse:
 				hasToolUse = true
 				inputMessages = append(inputMessages, block)
+
+				if err := sendStatus(conn, AgentStateTool, "running "+block.ToolUse.Name); err != nil {
+					return err
+				}
 
 				toolResp, toolErr := tool.Execute(tools, block.ToolUse.Name, block.ToolUse.Input)
 				var toolResult llm.ToolResult
@@ -142,12 +151,14 @@ func runAgentLoop(conn *websocket.Conn, client llm.LLM, inputMessages []llm.Mess
 					ToolResult: &ToolResult{
 						ID:       block.ToolUse.ID,
 						ToolName: block.ToolUse.Name,
-						Content:  toolResp,
-						IsError:  toolResult.IsError,
+						// toolResp is empty when the tool failed, the reason is
+						// on the result we are about to feed back to the model.
+						Content: toolResult.Content,
+						IsError: toolResult.IsError,
 					},
 				})
 				if err != nil {
-					return cost, totalTime, err
+					return err
 				}
 
 				inputMessages = append(inputMessages, llm.Message{
@@ -160,7 +171,7 @@ func runAgentLoop(conn *websocket.Conn, client llm.LLM, inputMessages []llm.Mess
 		}
 
 		if !hasToolUse {
-			return cost, totalTime, nil
+			return nil
 		}
 	}
 }

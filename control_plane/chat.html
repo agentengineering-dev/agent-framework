@@ -2,113 +2,397 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Agent Chat</title>
 
     <style>
+        :root{
+            --bg:#eceef1;
+            --panel:#ffffff;
+            --line:#e4e7ec;
+            --ink:#1c2024;
+            --ink-soft:#6b7280;
+            --ink-faint:#9aa1ac;
+            --accent:#2f6fed;
+            --accent-ink:#ffffff;
+            --tool:#f5f6f8;
+            --tool-line:#e0e3e9;
+            --error:#c0392b;
+            --error-bg:#fdf1f0;
+            --ok:#2e7d5b;
+            --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+        }
+
+        *{box-sizing:border-box}
+
         body{
-            font-family:system-ui;
-            background:#f3f3f3;
+            font-family:system-ui,-apple-system,Segoe UI,sans-serif;
+            background:var(--bg);
+            color:var(--ink);
             margin:0;
             height:100vh;
             display:flex;
             justify-content:center;
             align-items:center;
+            font-size:14px;
         }
 
         #app{
-            width:720px;
-            height:90vh;
-            background:white;
-            border-radius:10px;
+            width:min(860px,100vw);
+            height:min(94vh,100vh);
+            background:var(--panel);
+            border-radius:12px;
             display:flex;
             flex-direction:column;
-            box-shadow:0 10px 30px rgba(0,0,0,0.1);
+            overflow:hidden;
+            box-shadow:0 10px 30px rgba(0,0,0,0.12);
         }
+
+        /* ---- header ---- */
+
+        #header{
+            display:flex;
+            align-items:center;
+            gap:10px;
+            padding:12px 16px;
+            border-bottom:1px solid var(--line);
+        }
+
+        #session-title{
+            font-weight:600;
+            flex:1;
+            min-width:0;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+        }
+
+        #session-title.placeholder{
+            color:var(--ink-faint);
+            font-weight:500;
+        }
+
+        .chip{
+            font-size:11px;
+            font-family:var(--mono);
+            color:var(--ink-soft);
+            background:var(--tool);
+            border:1px solid var(--tool-line);
+            border-radius:999px;
+            padding:3px 9px;
+            white-space:nowrap;
+        }
+
+        /* ---- controls ---- */
 
         #controls{
-            padding:15px;
-            border-bottom:1px solid #eee;
+            padding:12px 16px;
+            border-bottom:1px solid var(--line);
+            display:flex;
+            gap:8px;
+            align-items:flex-start;
         }
 
-        textarea{
-            width:100%;
-            height:60px;
-            margin-bottom:8px;
+        #goal{
+            flex:1;
+            height:58px;
+            resize:vertical;
+            font:inherit;
+            padding:8px 10px;
+            border:1px solid var(--line);
+            border-radius:8px;
+            background:#fbfbfc;
         }
 
-        input{
-            width:100%;
-            margin-bottom:8px;
-            padding:6px;
+        #goal:focus,#provider:focus{
+            outline:none;
+            border-color:var(--accent);
         }
 
-        button{
+        #side{
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+            width:190px;
+        }
+
+        #provider{
+            font:inherit;
+            padding:7px 9px;
+            border:1px solid var(--line);
+            border-radius:8px;
+            background:#fbfbfc;
+        }
+
+        #send{
+            font:inherit;
+            font-weight:600;
             padding:8px 14px;
+            border:none;
+            border-radius:8px;
+            background:var(--accent);
+            color:var(--accent-ink);
+            cursor:pointer;
         }
+
+        #send:hover{filter:brightness(1.07)}
+        #send:disabled{background:#b9c3d4;cursor:default;filter:none}
+
+        /* ---- messages ---- */
+
+        #scroller{position:relative;flex:1;min-height:0}
 
         #messages{
-            flex:1;
+            height:100%;
             overflow-y:auto;
-            padding:20px;
+            padding:18px 16px 22px 16px;
         }
 
-        .message{
-            margin-bottom:14px;
-            display:flex;
-        }
+        .message{margin-bottom:12px;display:flex;flex-direction:column}
+        .message.user{align-items:flex-end}
 
-        .message.user{
-            justify-content:flex-end;
+        .role{
+            font-size:10px;
+            letter-spacing:.08em;
+            text-transform:uppercase;
+            color:var(--ink-faint);
+            margin-bottom:3px;
+            padding:0 2px;
         }
 
         .bubble{
-            padding:10px 14px;
-            border-radius:8px;
-            max-width:70%;
+            padding:9px 13px;
+            border-radius:12px;
+            max-width:78%;
             white-space:pre-wrap;
+            word-break:break-word;
+            line-height:1.5;
         }
 
         .user .bubble{
-            background:#ececec;
-            color:white;
+            background:var(--accent);
+            color:var(--accent-ink);
+            border-bottom-right-radius:4px;
         }
 
         .assistant .bubble{
-            background:#ececec;
+            background:#f2f3f5;
+            color:var(--ink);
+            border-bottom-left-radius:4px;
         }
 
+        /* the framework talking about itself, not a turn in the conversation */
         .agent .bubble{
-            background:#ececec;
+            background:transparent;
+            border:1px dashed var(--tool-line);
+            color:var(--ink-soft);
+            font-size:12.5px;
+            max-width:100%;
+        }
+
+        .agent.is-error .bubble{
+            border-color:#f0c4bf;
+            background:var(--error-bg);
+            color:var(--error);
         }
 
         .title{
             font-weight:600;
-            font-size:15px;
+            font-size:13px;
             text-align:center;
-            padding:8px 0 14px 0;
-            border-bottom:1px solid #eee;
-            margin-bottom:14px;
+            color:var(--ink-soft);
+            padding:6px 0 12px 0;
+            border-bottom:1px solid var(--line);
+            margin:4px 0 14px 0;
         }
+
+        /* ---- tool blocks ---- */
 
         .tool{
-            font-family:monospace;
-            background: #ececec;
-            color:black;
-            padding:8px;
-            border-radius:6px;
-            margin:8px 0;
-        }
-
-        .tool.error{
-            color:#ff4d4d;
-        }
-
-        #status{
+            border:1px solid var(--tool-line);
+            background:var(--tool);
+            border-radius:8px;
+            margin:0 0 10px 0;
+            overflow:hidden;
             font-size:12px;
-            padding:6px 10px;
-            border-top:1px solid #eee;
-            background:#fafafa;
         }
+
+        .tool.error{border-color:#f0c4bf;background:var(--error-bg)}
+
+        .tool-head{
+            display:flex;
+            align-items:center;
+            gap:8px;
+            padding:7px 10px;
+            cursor:pointer;
+            user-select:none;
+        }
+
+        .tool-head:hover{background:rgba(0,0,0,0.03)}
+
+        .caret{
+            color:var(--ink-faint);
+            font-size:10px;
+            width:9px;
+            flex:none;
+            transition:transform .12s;
+        }
+
+        .tool.open .caret{transform:rotate(90deg)}
+
+        .kind{
+            font-size:10px;
+            letter-spacing:.06em;
+            text-transform:uppercase;
+            color:var(--ink-faint);
+            flex:none;
+        }
+
+        .tool-name{font-family:var(--mono);font-weight:600;flex:none}
+        .tool.error .tool-name{color:var(--error)}
+
+        .peek{
+            font-family:var(--mono);
+            color:var(--ink-soft);
+            flex:1;
+            min-width:0;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+        }
+
+        .size{
+            font-family:var(--mono);
+            font-size:11px;
+            color:var(--ink-faint);
+            flex:none;
+        }
+
+        .tool-body{
+            display:none;
+            border-top:1px solid var(--tool-line);
+        }
+
+        .tool.open .tool-body{display:block}
+        .tool.open .peek{visibility:hidden}
+        .tool.error .tool-body{border-top-color:#f0c4bf}
+
+        .tool-body pre{
+            margin:0;
+            padding:9px 11px;
+            font-family:var(--mono);
+            font-size:11.5px;
+            line-height:1.5;
+            white-space:pre-wrap;
+            word-break:break-word;
+            /* a big tool result must not push the conversation off screen */
+            max-height:260px;
+            overflow:auto;
+        }
+
+        .truncated{
+            padding:6px 11px;
+            border-top:1px dashed var(--tool-line);
+            color:var(--ink-faint);
+            font-size:11px;
+        }
+
+        /* ---- jump to latest ---- */
+
+        #jump{
+            position:absolute;
+            right:16px;
+            bottom:14px;
+            border:1px solid var(--tool-line);
+            background:var(--panel);
+            color:var(--ink-soft);
+            border-radius:999px;
+            padding:6px 12px;
+            font:inherit;
+            font-size:12px;
+            cursor:pointer;
+            box-shadow:0 3px 10px rgba(0,0,0,0.12);
+        }
+
+        #jump:hover{color:var(--ink)}
+        #jump[hidden]{display:none}
+
+        /* ---- metrics ---- */
+
+        #metrics{
+            border-top:1px solid var(--line);
+            background:#fafbfc;
+            padding:8px 16px 10px 16px;
+            display:flex;
+            align-items:center;
+            gap:18px;
+            flex-wrap:wrap;
+            font-size:12px;
+        }
+
+        .metric{display:flex;flex-direction:column;gap:3px;min-width:0}
+
+        .metric .label{
+            font-size:9.5px;
+            letter-spacing:.07em;
+            text-transform:uppercase;
+            color:var(--ink-faint);
+        }
+
+        .metric .value{
+            font-family:var(--mono);
+            font-size:12.5px;
+            color:var(--ink);
+            white-space:nowrap;
+        }
+
+        .metric .value .dim{color:var(--ink-faint)}
+
+        #context-metric{flex:1;min-width:190px;max-width:320px}
+
+        .gauge{
+            height:4px;
+            border-radius:2px;
+            background:var(--tool-line);
+            overflow:hidden;
+        }
+
+        .gauge i{
+            display:block;
+            height:100%;
+            width:0;
+            background:var(--accent);
+            transition:width .3s;
+        }
+
+        .gauge.warn i{background:#d98324}
+        .gauge.hot i{background:var(--error)}
+
+        #state{
+            display:flex;
+            align-items:center;
+            gap:7px;
+            color:var(--ink-soft);
+            margin-left:auto;
+            font-size:12px;
+        }
+
+        #state .dot{
+            width:7px;
+            height:7px;
+            border-radius:50%;
+            background:var(--ink-faint);
+            flex:none;
+        }
+
+        #state.busy .dot{background:var(--accent);animation:pulse 1s ease-in-out infinite}
+        #state.done .dot{background:var(--ok)}
+        #state.error{color:var(--error)}
+        #state.error .dot{background:var(--error)}
+
+        #state .timer{font-family:var(--mono);color:var(--ink-faint)}
+
+        @keyframes pulse{50%{opacity:.25}}
     </style>
 </head>
 
@@ -116,47 +400,170 @@
 
 <div id="app">
 
+    <div id="header">
+        <div id="session-title" class="placeholder">No session</div>
+        <div class="chip" id="model-chip" hidden></div>
+    </div>
+
     <div id="controls">
 
         <textarea id="goal" placeholder="Goal"></textarea>
 
-        <input id="provider" placeholder="Provider (openai, anthropic, etc)">
-
-        <button id="send">Start Agent</button>
+        <div id="side">
+            <input id="provider" placeholder="Provider" list="providers" value="anthropic">
+            <datalist id="providers">
+                <option value="anthropic">
+                <option value="openai">
+                <option value="google">
+                <option value="deepseek">
+                <option value="ollama">
+                <option value="unsloth">
+            </datalist>
+            <button id="send">Start Agent</button>
+        </div>
 
     </div>
 
-    <div id="messages"></div>
+    <div id="scroller">
+        <div id="messages"></div>
+        <button id="jump" hidden>Jump to latest ↓</button>
+    </div>
 
-    <div id="status">idle</div>
+    <div id="metrics">
+
+        <div class="metric" id="context-metric">
+            <div class="label">Context</div>
+            <div class="value" id="context-value">–</div>
+            <div class="gauge"><i id="context-bar"></i></div>
+        </div>
+
+        <div class="metric">
+            <div class="label">Throughput</div>
+            <div class="value" id="throughput-value">–</div>
+        </div>
+
+        <div class="metric">
+            <div class="label">Tokens</div>
+            <div class="value" id="tokens-value">–</div>
+        </div>
+
+        <div class="metric">
+            <div class="label">Cost</div>
+            <div class="value" id="cost-value">–</div>
+        </div>
+
+        <div id="state"><span class="dot"></span><span class="text">idle</span><span class="timer"></span></div>
+
+    </div>
 
 </div>
 
 <script>
 
+    const messages = document.getElementById("messages")
+    const scroller = document.getElementById("messages")
+    const jumpBtn = document.getElementById("jump")
+
+    const sessionTitle = document.getElementById("session-title")
+    const modelChip = document.getElementById("model-chip")
+    const sendBtn = document.getElementById("send")
+
+    const contextValue = document.getElementById("context-value")
+    const contextBar = document.getElementById("context-bar")
+    const contextGauge = contextBar.parentElement
+    const throughputValue = document.getElementById("throughput-value")
+    const tokensValue = document.getElementById("tokens-value")
+    const costValue = document.getElementById("cost-value")
+    const stateEl = document.getElementById("state")
+    const stateText = stateEl.querySelector(".text")
+    const stateTimer = stateEl.querySelector(".timer")
+
     let ws = null
 
-    const messages = document.getElementById("messages")
-    const status = document.getElementById("status")
+    // --- scrolling -------------------------------------------------------
+    //
+    // new events only pull the view down when the user is already reading the
+    // bottom. the moment they scroll up to read something they stay there.
 
-    function scrollBottom(){
-        messages.scrollTop = messages.scrollHeight
+    const NEAR_BOTTOM_PX = 48
+
+    let follow = true
+
+    function atBottom(){
+        return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= NEAR_BOTTOM_PX
     }
 
-    function addMessage(role,text){
+    function scrollBottom(){
+        scroller.scrollTop = scroller.scrollHeight
+    }
+
+    scroller.addEventListener("scroll",()=>{
+        follow = atBottom()
+        jumpBtn.hidden = follow
+    })
+
+    jumpBtn.onclick = ()=>{
+        follow = true
+        jumpBtn.hidden = true
+        scrollBottom()
+    }
+
+    // append is the only way anything enters the log, so following is decided
+    // in exactly one place.
+    function append(node){
+        const stick = follow
+        messages.appendChild(node)
+        if(stick){
+            scrollBottom()
+            jumpBtn.hidden = true
+        }else{
+            jumpBtn.hidden = false
+        }
+    }
+
+    // --- formatting ------------------------------------------------------
+
+    function formatTokens(n){
+        if(!n && n !== 0) return "–"
+        if(n >= 1000000) return (n/1000000).toFixed(2)+"M"
+        if(n >= 1000) return (n/1000).toFixed(n >= 100000 ? 0 : 1)+"k"
+        return String(n)
+    }
+
+    function formatBytes(n){
+        if(n < 1024) return n+" B"
+        if(n < 1024*1024) return (n/1024).toFixed(1)+" KB"
+        return (n/(1024*1024)).toFixed(1)+" MB"
+    }
+
+    function truncate(text,limit){
+        return text.length > limit ? text.slice(0,limit)+"…" : text
+    }
+
+    function firstLine(text,limit){
+        return truncate((text||"").trim().split("\n")[0],limit)
+    }
+
+    // --- log entries -----------------------------------------------------
+
+    function addMessage(role,text,isError){
 
         const wrapper = document.createElement("div")
         wrapper.className = "message " + role
+        if(isError) wrapper.classList.add("is-error")
+
+        const label = document.createElement("div")
+        label.className = "role"
+        label.textContent = role
 
         const bubble = document.createElement("div")
         bubble.className = "bubble"
-        bubble.textContent = role + "\n" + text
-        bubble.style.whiteSpace = "pre-line";
+        bubble.textContent = text
 
+        wrapper.appendChild(label)
         wrapper.appendChild(bubble)
-        messages.appendChild(wrapper)
 
-        scrollBottom()
+        append(wrapper)
     }
 
     function addTitle(text){
@@ -165,54 +572,184 @@
         div.className = "title"
         div.textContent = text
 
-        messages.appendChild(div)
-        scrollBottom()
+        append(div)
+
+        sessionTitle.textContent = text
+        sessionTitle.classList.remove("placeholder")
+        document.title = text
+    }
+
+    // a collapsible tool block. the head always says what happened, the body
+    // holds the payload and stays shut unless it is short or it failed.
+    function addToolBlock(opts){
+
+        const div = document.createElement("div")
+        div.className = "tool"
+        if(opts.isError) div.classList.add("error")
+
+        const head = document.createElement("div")
+        head.className = "tool-head"
+
+        const caret = document.createElement("span")
+        caret.className = "caret"
+        caret.textContent = "▶"
+
+        const kind = document.createElement("span")
+        kind.className = "kind"
+        kind.textContent = opts.kind
+
+        const name = document.createElement("span")
+        name.className = "tool-name"
+        name.textContent = opts.name || "?"
+
+        const peek = document.createElement("span")
+        peek.className = "peek"
+        peek.textContent = opts.peek || firstLine(opts.body,160)
+
+        const size = document.createElement("span")
+        size.className = "size"
+        size.textContent = opts.isError ? "error" : formatBytes(opts.body.length)
+        size.title = opts.id || ""
+
+        head.append(caret,kind,name,peek,size)
+
+        const body = document.createElement("div")
+        body.className = "tool-body"
+
+        const pre = document.createElement("pre")
+        // the model can hand back a whole file, keep the dom small and say so.
+        const LIMIT = 4000
+        pre.textContent = opts.body.length > LIMIT ? opts.body.slice(0,LIMIT) : opts.body
+        body.appendChild(pre)
+
+        if(opts.body.length > LIMIT){
+            const note = document.createElement("div")
+            note.className = "truncated"
+            note.textContent = "… "+formatBytes(opts.body.length-LIMIT)+" more, sent to the model in full"
+            body.appendChild(note)
+        }
+
+        div.append(head,body)
+
+        head.onclick = ()=> div.classList.toggle("open")
+
+        // failures and one liners are worth reading without a click
+        if(opts.isError || (opts.body.length <= 240 && opts.body.indexOf("\n") === -1)){
+            div.classList.add("open")
+        }
+
+        append(div)
     }
 
     function addToolUse(tool){
-
-        const div = document.createElement("div")
-        div.className = "tool"
-        div.style.whiteSpace = "pre-line";
-        div.textContent =
-            `tool_use\n
-name: ${tool.name}\n
-id: ${tool.id}\n
-
-input:\n
-${JSON.stringify(tool.input,null,2)}`
-
-        messages.appendChild(div)
-        scrollBottom()
+        let input = "", compact = ""
+        try{
+            input = JSON.stringify(tool.input,null,2)
+            compact = JSON.stringify(tool.input)
+        }catch(err){
+            input = compact = String(tool.input)
+        }
+        addToolBlock({
+            kind:"call",
+            name:tool.name,
+            id:tool.id,
+            body:input || "{}",
+            peek:truncate(compact || "{}",160),
+            isError:false
+        })
     }
 
     function addToolResult(result){
-
-        const div = document.createElement("div")
-        div.className = "tool"
-
-        if(result.isError) div.classList.add("error")
-
-        div.style.whiteSpace = "pre-line";
-
-        div.textContent =
-            `tool_result\n
-tool: ${result.toolName}\n
-id: ${result.id}\n
-
-output:\n
-${result.content}`
-
-        messages.appendChild(div)
-        scrollBottom()
+        addToolBlock({
+            kind:"result",
+            name:result.tool_name,
+            id:result.id,
+            body:result.content || "",
+            isError:!!result.is_error
+        })
     }
+
+    // --- metrics ---------------------------------------------------------
+
+    function renderUsage(u){
+
+        if(u.model){
+            modelChip.hidden = false
+            modelChip.textContent = u.provider ? u.provider+" · "+u.model : u.model
+        }
+
+        // context in use: the conversation the next inference carries.
+        if(u.context_tokens > 0){
+            if(u.context_window > 0){
+                const pct = Math.min(u.context_percent,100)
+                contextValue.innerHTML = formatTokens(u.context_tokens)+
+                    ' <span class="dim">/ '+formatTokens(u.context_window)+' · '+pct.toFixed(1)+'%</span>'
+                contextBar.style.width = pct+"%"
+                contextGauge.className = "gauge"+(pct >= 90 ? " hot" : pct >= 70 ? " warn" : "")
+            }else{
+                // window unknown for this model, report the raw count only
+                contextValue.innerHTML = formatTokens(u.context_tokens)+' <span class="dim">tokens</span>'
+                contextBar.style.width = "0%"
+            }
+        }
+
+        if(u.tokens_per_second > 0){
+            throughputValue.innerHTML = u.tokens_per_second.toFixed(1)+
+                ' <span class="dim">tok/s · avg '+u.avg_tokens_per_second.toFixed(1)+'</span>'
+        }
+
+        tokensValue.innerHTML = formatTokens(u.input_tokens)+' in <span class="dim">/</span> '+
+            formatTokens(u.output_tokens)+' out <span class="dim">· '+u.inferences+' calls</span>'
+
+        costValue.innerHTML = '$'+u.cost.toFixed(4)+
+            ' <span class="dim">· '+u.elapsed_time.toFixed(0)+'s</span>'
+    }
+
+    // the agent state drives a live timer, so a slow inference reads as work
+    // in progress rather than a dead socket.
+
+    let timerHandle = null
+    let stateSince = 0
+
+    function setState(state,text){
+
+        stateEl.className = ""
+        if(state === "inferring" || state === "tool") stateEl.classList.add("busy")
+        else if(state === "done") stateEl.classList.add("done")
+        else if(state === "error") stateEl.classList.add("error")
+
+        stateText.textContent = text
+
+        clearInterval(timerHandle)
+        timerHandle = null
+        stateTimer.textContent = ""
+
+        if(state === "inferring" || state === "tool"){
+            stateSince = Date.now()
+            timerHandle = setInterval(()=>{
+                stateTimer.textContent = ((Date.now()-stateSince)/1000).toFixed(1)+"s"
+            },100)
+        }
+    }
+
+    function resetMetrics(){
+        contextValue.textContent = "–"
+        contextBar.style.width = "0%"
+        contextGauge.className = "gauge"
+        throughputValue.textContent = "–"
+        tokensValue.textContent = "–"
+        costValue.textContent = "–"
+        modelChip.hidden = true
+    }
+
+    // --- events ----------------------------------------------------------
 
     function handleEvent(evt){
 
         switch(evt.type){
 
             case "text":
-                addMessage(evt.role, evt.text)
+                addMessage(evt.role,evt.text || "",(evt.text || "").startsWith("Error: "))
                 break
 
             case "title":
@@ -220,14 +757,19 @@ ${result.content}`
                 break
 
             case "tool_use":
-                console.log(evt)
-                console.log(evt.tool_use)
                 if(evt.tool_use) addToolUse(evt.tool_use)
                 break
 
             case "tool_result":
-                console.log(evt.tool_result)
                 if(evt.tool_result) addToolResult(evt.tool_result)
+                break
+
+            case "usage":
+                if(evt.usage) renderUsage(evt.usage)
+                break
+
+            case "status":
+                setState(evt.state,evt.state === "inferring" || evt.state === "tool" ? evt.text : evt.state)
                 break
         }
     }
@@ -235,56 +777,61 @@ ${result.content}`
     function connect(goal,provider){
 
         messages.innerHTML = ""
+        follow = true
+        jumpBtn.hidden = true
+        resetMetrics()
+        modelChip.hidden = false
+        modelChip.textContent = provider
+        sessionTitle.textContent = "Starting…"
+        sessionTitle.classList.add("placeholder")
+        sendBtn.disabled = true
+        setState("inferring","connecting")
 
-        const endpoint = `ws://${location.host}/create-session`
+        ws = new WebSocket(`ws://${location.host}/create-session`)
 
-        ws = new WebSocket(endpoint)
-
-        ws.onopen = () => {
-
-            status.textContent = "connected"
-
-            const payload = {
-                goal: goal,
-                provider: provider
-            }
-
-            ws.send(JSON.stringify(payload))
+        ws.onopen = ()=>{
+            setState("inferring","connected")
+            ws.send(JSON.stringify({goal:goal,provider:provider}))
         }
 
         ws.onmessage = (msg)=>{
-
             try{
-                const event = JSON.parse(msg.data)
-                handleEvent(event)
+                handleEvent(JSON.parse(msg.data))
             }catch(err){
-                console.error(err)
+                console.error(err,msg.data)
             }
         }
 
         ws.onclose = ()=>{
-            status.textContent = "connection closed"
+            sendBtn.disabled = false
+            // a session that ended on its own already reported why
+            if(!stateEl.classList.contains("done") && !stateEl.classList.contains("error")){
+                setState("idle","connection closed")
+            }
         }
 
         ws.onerror = ()=>{
-            status.textContent = "connection error"
+            sendBtn.disabled = false
+            setState("error","connection error")
         }
     }
 
-    document.getElementById("send").onclick = ()=>{
+    sendBtn.onclick = ()=>{
 
-        const goal = document.getElementById("goal").value
-        const provider = document.getElementById("provider").value
+        const goal = document.getElementById("goal").value.trim()
+        const provider = document.getElementById("provider").value.trim()
 
         if(!goal || !provider){
             alert("goal and provider required")
             return
         }
 
-        addMessage("user",goal)
-
         connect(goal,provider)
     }
+
+    document.getElementById("goal").addEventListener("keydown",(e)=>{
+        if((e.metaKey || e.ctrlKey) && e.key === "Enter") sendBtn.click()
+    })
 
 </script>
 

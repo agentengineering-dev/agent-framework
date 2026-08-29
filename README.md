@@ -31,6 +31,12 @@ This project is an agent-framework for building code agents.
     unsloth studio, and `UNSLOTH_MODEL` selects one of the models the studio has
     loaded (`GET /v1/models` lists them).
 
+    The context gauge in the ui needs to know how large a context the studio is
+    serving, which is rarely the model's native window. The framework reads it
+    from the studio's own `/v1/models` (`context_length`), so nothing needs
+    configuring. `UNSLOTH_CONTEXT_WINDOW` overrides it if the studio reports a
+    size it is not really honouring.
+
 ### Usage
 
 Run the agent using the following command:

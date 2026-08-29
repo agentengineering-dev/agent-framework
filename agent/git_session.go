@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/agentengineering.dev/agent-framework/git_helpers"
 	"github.com/agentengineering.dev/agent-framework/llm"
@@ -38,13 +39,14 @@ func CreateGitAgentSession(c *gin.Context) {
 		return
 	}
 
-	err = sendText(conn, RoleUser, params.Provider)
+	err = sendText(conn, RoleUser, params.Goal)
 	if err != nil {
 		return
 	}
 
-	err = sendText(conn, RoleUser, params.Goal)
-	if err != nil {
+	usage := newUsageTracker(params.Provider)
+
+	if err := sendStatus(conn, AgentStateInferring, "naming the branch"); err != nil {
 		return
 	}
 
@@ -66,6 +68,10 @@ func CreateGitAgentSession(c *gin.Context) {
 	}
 
 	fmt.Println(fmt.Sprintf("Agent: Inference cost: $%f, time: %s", md.Cost, md.Time))
+
+	if err := sendUsageAside(conn, usage, md); err != nil {
+		return
+	}
 
 	branch := sessionMetadata.BranchName
 
@@ -95,19 +101,20 @@ func CreateGitAgentSession(c *gin.Context) {
 		},
 	}
 
-	cost, totalTime, err := runAgentLoop(conn, client, inputMessages, tool.GitToolMap)
-
-	// the branch naming inference is part of the session too
-	cost += md.Cost
-	totalTime += md.Time
-
+	err = runAgentLoop(conn, client, inputMessages, tool.GitToolMap, usage)
 	if err != nil {
+		_ = sendStatus(conn, AgentStateError, err.Error())
 		sendError(conn, err)
 		return
 	}
 
-	result := fmt.Sprintf("Agent Session Ended: Session Inference cost: $%f, time: %s", cost, totalTime)
+	final := usage.record(nil)
+	result := fmt.Sprintf("Agent Session Ended: Session Inference cost: $%f, time: %s", final.Cost, time.Duration(final.InferenceTime*float64(time.Second)))
 	fmt.Println(result)
+
+	if err := sendStatus(conn, AgentStateDone, result); err != nil {
+		return
+	}
 
 	err = sendText(conn, RoleAgent, result)
 	if err != nil {
