@@ -138,6 +138,18 @@
         #send:hover{filter:brightness(1.07)}
         #send:disabled{background:#b9c3d4;cursor:default;filter:none}
 
+        #autocont{
+            display:flex;
+            align-items:center;
+            gap:6px;
+            font-size:11.5px;
+            color:var(--ink-soft);
+            cursor:pointer;
+            user-select:none;
+        }
+
+        #autocont input{margin:0;accent-color:var(--accent)}
+
         /* ---- messages ---- */
 
         #scroller{position:relative;flex:1;min-height:0}
@@ -297,6 +309,37 @@
             font-size:11px;
         }
 
+        /* ---- handoff ---- */
+
+        #handoff{
+            display:none;
+            align-items:center;
+            gap:12px;
+            padding:10px 16px;
+            background:#fff8e8;
+            border-top:1px solid #f0e2bd;
+            font-size:13px;
+        }
+
+        #handoff.visible{display:flex}
+
+        #handoff .msg{flex:1;color:#7a5d17;min-width:0}
+
+        #continue{
+            font:inherit;
+            font-weight:600;
+            font-size:12.5px;
+            padding:7px 14px;
+            border:none;
+            border-radius:8px;
+            background:#b7791f;
+            color:white;
+            cursor:pointer;
+            white-space:nowrap;
+        }
+
+        #continue:hover{filter:brightness(1.08)}
+
         /* ---- jump to latest ---- */
 
         #jump{
@@ -420,6 +463,10 @@
                 <option value="unsloth">
             </datalist>
             <button id="send">Start Agent</button>
+            <label id="autocont">
+                <input type="checkbox" id="auto-cont">
+                auto-continue on handoff
+            </label>
         </div>
 
     </div>
@@ -427,6 +474,11 @@
     <div id="scroller">
         <div id="messages"></div>
         <button id="jump" hidden>Jump to latest ↓</button>
+    </div>
+
+    <div id="handoff">
+        <span class="msg">The model wrote down its answer and a prompt for the next run. Continue with a fresh session?</span>
+        <button id="continue">Continue →</button>
     </div>
 
     <div id="metrics">
@@ -477,6 +529,13 @@
     const stateEl = document.getElementById("state")
     const stateText = stateEl.querySelector(".text")
     const stateTimer = stateEl.querySelector(".timer")
+
+    const handoffBar = document.getElementById("handoff")
+    const continueBtn = document.getElementById("continue")
+    const autoCont = document.getElementById("auto-cont")
+
+    let currentProvider = ""
+    let lastHandoff = null
 
     let ws = null
 
@@ -669,6 +728,66 @@
         })
     }
 
+    function addHandoffBlock(h){
+
+        const div = document.createElement("div")
+        div.className = "tool open"
+        div.style.borderColor = "#ecd9a8"
+        div.style.background = "#fffaf0"
+
+        const head = document.createElement("div")
+        head.className = "tool-head"
+        head.style.cursor = "default"
+
+        const caret = document.createElement("span")
+        caret.className = "caret"
+        caret.textContent = "▶"
+        caret.style.visibility = "hidden"
+
+        const kind = document.createElement("span")
+        kind.className = "kind"
+        kind.textContent = "handoff"
+
+        const name = document.createElement("span")
+        name.className = "tool-name"
+        name.textContent = "session handed off"
+
+        const size = document.createElement("span")
+        size.className = "size"
+        size.textContent = h.next_prompt ? "answer + next prompt" : "answer only"
+
+        head.append(caret,kind,name,size)
+
+        const body = document.createElement("div")
+        body.className = "tool-body"
+        body.style.display = "block"
+        body.style.borderTopColor = "#ecd9a8"
+
+        const answerLabel = document.createElement("div")
+        answerLabel.className = "truncated"
+        answerLabel.style.borderTop = "none"
+        answerLabel.textContent = "answer so far"
+        body.appendChild(answerLabel)
+
+        const answer = document.createElement("pre")
+        answer.textContent = h.answer || "(the model wrote nothing down)"
+        body.appendChild(answer)
+
+        if(h.next_prompt){
+            const promptLabel = document.createElement("div")
+            promptLabel.className = "truncated"
+            promptLabel.textContent = "prompt for the next run"
+            body.appendChild(promptLabel)
+
+            const next = document.createElement("pre")
+            next.textContent = h.next_prompt
+            body.appendChild(next)
+        }
+
+        div.append(head,body)
+        append(div)
+    }
+
     // --- metrics ---------------------------------------------------------
 
     function renderUsage(u){
@@ -768,17 +887,41 @@
                 if(evt.usage) renderUsage(evt.usage)
                 break
 
+            case "handoff":
+                if(!evt.handoff) break
+                lastHandoff = evt.handoff
+                addHandoffBlock(evt.handoff)
+                setState("done","handed off")
+                if(autoCont.checked){
+                    // let the log settle before the fresh session wipes it
+                    setTimeout(continueSession,1200)
+                }else{
+                    handoffBar.classList.add("visible")
+                }
+                break
+
             case "status":
                 setState(evt.state,evt.state === "inferring" || evt.state === "tool" ? evt.text : evt.state)
                 break
         }
     }
 
-    function connect(goal,provider){
+    function connect(goal,provider,resume){
+
+        currentProvider = provider
+
+        // a previous socket may still be winding down; detach so its close
+        // cannot re-enable the send button under the new session
+        if(ws){
+            ws.onclose = ws.onerror = ws.onmessage = null
+            ws.close()
+        }
 
         messages.innerHTML = ""
         follow = true
         jumpBtn.hidden = true
+        handoffBar.classList.remove("visible")
+        lastHandoff = null
         resetMetrics()
         modelChip.hidden = false
         modelChip.textContent = provider
@@ -791,7 +934,9 @@
 
         ws.onopen = ()=>{
             setState("inferring","connected")
-            ws.send(JSON.stringify({goal:goal,provider:provider}))
+            const payload = {goal:goal,provider:provider}
+            if(resume) payload.resume = resume
+            ws.send(JSON.stringify(payload))
         }
 
         ws.onmessage = (msg)=>{
@@ -828,6 +973,19 @@
 
         connect(goal,provider)
     }
+
+    function continueSession(){
+        if(!lastHandoff) return
+        const resume = {
+            answer:lastHandoff.answer,
+            next_prompt:lastHandoff.next_prompt,
+            // the fresh session keeps the chain of titles
+            title:(sessionTitle.textContent || "").replace(/^Continued: /,"")
+        }
+        connect(lastHandoff.goal,currentProvider,resume)
+    }
+
+    continueBtn.onclick = continueSession
 
     document.getElementById("goal").addEventListener("keydown",(e)=>{
         if((e.metaKey || e.ctrlKey) && e.key === "Enter") sendBtn.click()

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/agentengineering.dev/agent-framework/llm"
@@ -46,39 +47,6 @@ func CreateAgentSession(c *gin.Context) {
 
 	usage := newUsageTracker(params.Provider)
 
-	if err := sendStatus(conn, AgentStateInferring, "naming the session"); err != nil {
-		return
-	}
-
-	// name the session
-	sessionTitle := SessionTitle{}
-	md, err := client.GenerateStructuredResponse([]llm.Message{
-		{
-			Role: llm.RoleUser,
-			Type: llm.MessageTypeText,
-			Text: titlePrompt + params.Goal,
-		},
-	}, &sessionTitle)
-	if err != nil {
-		sendError(conn, err)
-		return
-	}
-
-	fmt.Println(fmt.Sprintf("Agent: Inference cost: $%f, time: %s", md.Cost, md.Time))
-
-	if err := sendUsageAside(conn, usage, md); err != nil {
-		return
-	}
-
-	err = sendEvent(conn, AgentSessionEvent{
-		Type: AgentSessionEventTitle,
-		Role: RoleAgent,
-		Text: sessionTitle.Title,
-	})
-	if err != nil {
-		return
-	}
-
 	// agent loop
 	inputMessages := []llm.Message{
 		{
@@ -93,10 +61,88 @@ func CreateAgentSession(c *gin.Context) {
 		},
 	}
 
-	err = runAgentLoop(conn, client, inputMessages, tool.ToolMap, usage)
+	// a continued session seeds the previous session's handoff instead of
+	// spending a fresh inference on a title it already has.
+	if params.Resume != nil {
+		preamble := resumePreamble(params.Resume)
+		inputMessages = append(inputMessages, llm.Message{
+			Role: llm.RoleUser,
+			Text: preamble,
+			Type: llm.MessageTypeText,
+		})
+
+		title := params.Resume.Title
+		if title == "" {
+			title = "Continued session"
+		}
+		if !strings.HasPrefix(title, "Continued: ") {
+			title = "Continued: " + title
+		}
+
+		if err := sendText(conn, RoleAgent, "Continuing from a previous session that ran low on context — the original goal, its partial answer and the prompt for this run were seeded into the fresh conversation."); err != nil {
+			return
+		}
+		if err := sendEvent(conn, AgentSessionEvent{
+			Type: AgentSessionEventTitle,
+			Role: RoleAgent,
+			Text: title,
+		}); err != nil {
+			return
+		}
+	} else {
+		if err := sendStatus(conn, AgentStateInferring, "naming the session"); err != nil {
+			return
+		}
+
+		// name the session
+		sessionTitle := SessionTitle{}
+		md, err := client.GenerateStructuredResponse([]llm.Message{
+			{
+				Role: llm.RoleUser,
+				Type: llm.MessageTypeText,
+				Text: titlePrompt + params.Goal,
+			},
+		}, &sessionTitle)
+		if err != nil {
+			sendError(conn, err)
+			return
+		}
+
+		fmt.Println(fmt.Sprintf("Agent: Inference cost: $%f, time: %s", md.Cost, md.Time))
+
+		if err := sendUsageAside(conn, usage, md); err != nil {
+			return
+		}
+
+		err = sendEvent(conn, AgentSessionEvent{
+			Type: AgentSessionEventTitle,
+			Role: RoleAgent,
+			Text: sessionTitle.Title,
+		})
+		if err != nil {
+			return
+		}
+	}
+
+	handoff, err := runAgentLoop(conn, client, inputMessages, tool.ToolMap, usage)
 	if err != nil {
 		_ = sendStatus(conn, AgentStateError, err.Error())
 		sendError(conn, err)
+		return
+	}
+
+	if handoff != nil {
+		handoff.Goal = params.Goal
+		if err := sendEvent(conn, AgentSessionEvent{
+			Type:    AgentSessionEventHandoff,
+			Role:    RoleAgent,
+			Handoff: handoff,
+		}); err != nil {
+			return
+		}
+		if err := sendStatus(conn, AgentStateDone, "handed off — continue in a fresh session when ready"); err != nil {
+			return
+		}
 		return
 	}
 
@@ -112,4 +158,16 @@ func CreateAgentSession(c *gin.Context) {
 	if err != nil {
 		return
 	}
+}
+
+// resumePreamble is the message that drops a previous session's handoff into
+// a fresh conversation.
+func resumePreamble(resume *SessionResume) string {
+	preamble := "This session continues a previous one that ran low on context. The original goal is repeated above.\n\nThe previous session's answer so far:\n" + resume.Answer + "\n"
+	if strings.TrimSpace(resume.NextPrompt) != "" {
+		preamble += "\nThe previous session's prompt for this run:\n" + resume.NextPrompt + "\n"
+	} else {
+		preamble += "\nThe previous session left no explicit prompt; continue its work from the answer above.\n"
+	}
+	return preamble + "\nPick up from there. The context window is fresh, but be economical with it."
 }

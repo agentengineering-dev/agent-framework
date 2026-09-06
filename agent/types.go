@@ -5,6 +5,15 @@ import "encoding/json"
 type CreateAgentSessionParams struct {
 	Goal     string `json:"goal"`
 	Provider string `json:"provider"`
+	// set when this session continues an earlier one that handed off.
+	Resume *SessionResume `json:"resume,omitempty"`
+}
+
+// SessionResume carries a previous session's handoff into a fresh one.
+type SessionResume struct {
+	Answer     string `json:"answer"`
+	NextPrompt string `json:"next_prompt"`
+	Title      string `json:"title,omitempty"`
 }
 
 type SessionMetadata struct {
@@ -24,6 +33,16 @@ type AgentSessionEvent struct {
 	ToolResult *ToolResult           `json:"tool_result"`
 	ToolUse    *ToolUse              `json:"tool_use"`
 	Usage      *Usage                `json:"usage,omitempty"`
+	Handoff    *Handoff              `json:"handoff,omitempty"`
+}
+
+// Handoff is what the model wrote down when the session ran low on context:
+// the answer as far as the work got, and the prompt it left for a fresh
+// session to pick the work up with.
+type Handoff struct {
+	Goal       string `json:"goal"`
+	Answer     string `json:"answer"`
+	NextPrompt string `json:"next_prompt"`
 }
 
 // Usage is what the framework observed for the session so far. Context and
@@ -81,6 +100,7 @@ const (
 	AgentSessionEventToolResult AgentSessionEventType = "tool_result"
 	AgentSessionEventUsage      AgentSessionEventType = "usage"
 	AgentSessionEventStatus     AgentSessionEventType = "status"
+	AgentSessionEventHandoff    AgentSessionEventType = "handoff"
 )
 
 // AgentState is what the agent is busy with, the ui turns it into a live

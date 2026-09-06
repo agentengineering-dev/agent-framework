@@ -105,9 +105,12 @@ func (u *usageTracker) fold(md *llm.InferenceMetadata, inConversation bool) Usag
 	return usage
 }
 
-// sendUsage reports an inference of the agent conversation to the client.
-func sendUsage(conn *websocket.Conn, u *usageTracker, md *llm.InferenceMetadata) error {
-	return sendUsageSnapshot(conn, u.record(md))
+// sendUsage reports an inference of the agent conversation to the client and
+// returns the snapshot it sent, so the caller can steer on the same numbers
+// the ui is showing.
+func sendUsage(conn *websocket.Conn, u *usageTracker, md *llm.InferenceMetadata) (Usage, error) {
+	snap := u.record(md)
+	return snap, sendUsageSnapshot(conn, snap)
 }
 
 // sendUsageAside is sendUsage for an inference outside the agent conversation.

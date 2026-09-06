@@ -101,10 +101,25 @@ func CreateGitAgentSession(c *gin.Context) {
 		},
 	}
 
-	err = runAgentLoop(conn, client, inputMessages, tool.GitToolMap, usage)
+	handoff, err := runAgentLoop(conn, client, inputMessages, tool.GitToolMap, usage)
 	if err != nil {
 		_ = sendStatus(conn, AgentStateError, err.Error())
 		sendError(conn, err)
+		return
+	}
+
+	if handoff != nil {
+		handoff.Goal = params.Goal
+		if err := sendEvent(conn, AgentSessionEvent{
+			Type:    AgentSessionEventHandoff,
+			Role:    RoleAgent,
+			Handoff: handoff,
+		}); err != nil {
+			return
+		}
+		if err := sendStatus(conn, AgentStateDone, "handed off — continue in a fresh session when ready"); err != nil {
+			return
+		}
 		return
 	}
 
