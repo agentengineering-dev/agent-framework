@@ -46,9 +46,7 @@ var handoffToolDef = llm.ToolDefinition{
 
 const systemPrompt = `
 You are an autonomous agent working in a project repository.
-The goal can either be an question or instruction.
-If it's a question, append the answer to QA.md file 
-Else follow the given instruction 
+Your context length is 13.3K tokens. Larger files always read partially to gain incremental understanding.
 Follow the goal given below:
 `
 
