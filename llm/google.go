@@ -34,35 +34,23 @@ func (g googleClient) GenerateStructuredResponse(messages []Message, resp interf
 	}
 	timeTaken := time.Since(now)
 
-	cost := computeGoogleCost("gemini-3-pro-preview", googleResponse.UsageMetadata)
+	md := googleMetadata("gemini-3-pro-preview", googleResponse.UsageMetadata, timeTaken)
 
 	if len(googleResponse.Candidates) > 0 {
 		if googleResponse.Candidates[0].FinishReason == genai.FinishReasonMaxTokens {
-			return &InferenceMetadata{
-				Cost: cost,
-				Time: timeTaken,
-			}, fmt.Errorf("max_tokens exceeded")
+			return md, fmt.Errorf("max_tokens exceeded")
 		}
 
 		if len(googleResponse.Candidates[0].Content.Parts) > 0 {
 			var err = json.Unmarshal([]byte(googleResponse.Candidates[0].Content.Parts[0].Text), resp)
 			if err != nil {
-				return &InferenceMetadata{
-					Cost: cost,
-					Time: timeTaken,
-				}, err
+				return md, err
 			}
 		} else {
-			return &InferenceMetadata{
-				Cost: cost,
-				Time: timeTaken,
-			}, errors.New("no suitable result")
+			return md, errors.New("no suitable result")
 		}
 	}
-	return &InferenceMetadata{
-		Cost: cost,
-		Time: timeTaken,
-	}, nil
+	return md, nil
 }
 
 func NewGoogleClient() (*googleClient, error) {
@@ -91,23 +79,36 @@ func (g googleClient) RunInference(messages []Message, tools []ToolDefinition) (
 		return nil, nil, err
 	}
 	timeTaken := time.Since(now)
-	cost := computeGoogleCost("gemini-3-pro-preview", googleResponse.UsageMetadata)
+	md := googleMetadata("gemini-3-pro-preview", googleResponse.UsageMetadata, timeTaken)
 
 	var response []Message
 	if len(googleResponse.Candidates) > 0 {
 		if googleResponse.Candidates[0].FinishReason == genai.FinishReasonMaxTokens {
-			return nil, &InferenceMetadata{
-				Cost: cost,
-				Time: timeTaken,
-			}, fmt.Errorf("max_tokens exceeded")
+			return nil, md, fmt.Errorf("max_tokens exceeded")
 		}
 
 		response = transformFromGoogleMessage(googleResponse.Candidates[0].Content)
 	}
-	return response, &InferenceMetadata{
-		Cost: cost,
-		Time: timeTaken,
-	}, nil
+	return response, md, nil
+}
+
+// googleMetadata folds a gemini usage block into our metadata. The usage block
+// is nil on some error paths, so it is treated as absent rather than empty.
+func googleMetadata(model string, usage *genai.GenerateContentResponseUsageMetadata, timeTaken time.Duration) *InferenceMetadata {
+	md := &InferenceMetadata{
+		Time:          timeTaken,
+		Provider:      PROVIDER_GOOGLE,
+		Model:         model,
+		ContextWindow: ContextWindowOf(PROVIDER_GOOGLE, model),
+	}
+	if usage == nil {
+		return md
+	}
+	md.Cost = computeGoogleCost(model, usage)
+	md.InputTokens = int64(usage.PromptTokenCount)
+	md.OutputTokens = int64(usage.CandidatesTokenCount + usage.ThoughtsTokenCount)
+	md.CachedTokens = int64(usage.CachedContentTokenCount)
+	return md
 }
 
 func computeGoogleCost(model string, metadata *genai.GenerateContentResponseUsageMetadata) float64 {

@@ -38,12 +38,14 @@ func (o *ollamaLLM) GenerateStructuredResponse(messages []Message, resp interfac
 	}
 
 	var toolCall *api.ToolCall
+	var responses []api.ChatResponse
 	start := time.Now()
 	err := o.client.Chat(context.Background(), &api.ChatRequest{
 		Model:    "qwen3-coder",
 		Messages: ollamaMessages,
 		Tools:    tools,
 	}, func(response api.ChatResponse) error {
+		responses = append(responses, response)
 		if len(response.Message.ToolCalls) > 0 {
 			tc := response.Message.ToolCalls[0]
 			toolCall = &tc
@@ -65,10 +67,7 @@ func (o *ollamaLLM) GenerateStructuredResponse(messages []Message, resp interfac
 	if err != nil {
 		return nil, err
 	}
-	return &InferenceMetadata{
-		Cost: 0,
-		Time: timeTaken,
-	}, nil
+	return ollamaMetadata(MODEL_OLLAMA_QWEN3_CODER, responses, timeTaken), nil
 
 }
 
@@ -90,20 +89,32 @@ func (o *ollamaLLM) RunInference(messages []Message, tools []ToolDefinition) ([]
 	})
 
 	timeTaken := time.Since(start)
+	metadata := ollamaMetadata(MODEL_OLLAMA_QWEN3_CODER, ollamaResponseMessages, timeTaken)
 	if err != nil {
-		return nil, &InferenceMetadata{
-			Cost: 0,
-			Time: timeTaken,
-		}, err
+		return nil, metadata, err
 	}
 
 	respMessages := transformFromOllamaMessage(ollamaResponseMessages)
 
-	return respMessages, &InferenceMetadata{
-		Cost: 0,
-		Time: timeTaken,
-	}, nil
+	return respMessages, metadata, nil
 
+}
+
+// ollamaMetadata sums the eval counts ollama reports. Nothing is billed for a
+// local model, the token counts are still what the ui gauges run on.
+func ollamaMetadata(model string, responses []api.ChatResponse, timeTaken time.Duration) *InferenceMetadata {
+	md := &InferenceMetadata{
+		Cost:          0,
+		Time:          timeTaken,
+		Provider:      PROVIDER_OLLAMA,
+		Model:         model,
+		ContextWindow: ContextWindowOf(PROVIDER_OLLAMA, model),
+	}
+	for _, r := range responses {
+		md.InputTokens += int64(r.PromptEvalCount)
+		md.OutputTokens += int64(r.EvalCount)
+	}
+	return md
 }
 
 func transformToOllamaTools(tools []ToolDefinition) []api.Tool {

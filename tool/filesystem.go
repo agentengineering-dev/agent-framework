@@ -7,6 +7,7 @@ and internal packages for git operations and agent tool integration.
 package tool
 
 import (
+	"bufio"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"github.com/agentengineering.dev/agent-framework/git_helpers"
 	"github.com/agentengineering.dev/agent-framework/llm"
 	"github.com/pmezard/go-difflib/difflib"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,11 +27,13 @@ import (
 // region list_files
 /*
 Defines a tool that lists all files and directories in a given path.
-Returns a newline-separated string, appending "/" to directory names.
+Returns a newline-separated string, appending "/" to directory names and the
+size of each file so the agent can tell a stub from a file worth a read_file
+window before it spends the call.
 */
 var ListFilesToolDefinition = llm.ToolDefinition{
 	Name:                "list_files",
-	Description:         "Returns a list of files in the given directory.",
+	Description:         "Returns a list of files in the given directory, with the size of each file. Directory names end in \"/\" and carry no size.",
 	InputSchemaInstance: ListFilesInput{},
 	Func:                ListFileImpl,
 }
@@ -53,12 +57,42 @@ var ListFileImpl = func(message json.RawMessage) (string, error) {
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() {
-			name += "/"
+			files = append(files, name+"/")
+			continue
 		}
-		files = append(files, name)
+		// a size we cannot read, a broken symlink say, is not worth failing
+		// the whole listing over. the name still tells the agent something.
+		info, err := entry.Info()
+		if err != nil {
+			files = append(files, name)
+			continue
+		}
+		files = append(files, fmt.Sprintf("%s (%s)", name, humanBytes(info.Size())))
 	}
 	return strings.Join(files, "\n"), nil
 
+}
+
+// humanBytes renders a size the way ls -h does, in units the model reads
+// without doing arithmetic on a ten digit number.
+func humanBytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	value := float64(n)
+	for _, suffix := range []string{"KB", "MB", "GB", "TB", "PB"} {
+		value /= unit
+		if value < unit {
+			// one decimal up to 10, none above it. 4.2 KB is worth knowing,
+			// the .3 of 512.3 KB is noise.
+			if value < 10 {
+				return fmt.Sprintf("%.1f %s", value, suffix)
+			}
+			return fmt.Sprintf("%.0f %s", value, suffix)
+		}
+	}
+	return fmt.Sprintf("%.0f EB", value/unit)
 }
 
 // endregion
@@ -67,16 +101,37 @@ var ListFileImpl = func(message json.RawMessage) (string, error) {
 /*
 Defines a tool that reads the contents of a specified file,
 blocks reading sensitive files like ".env", and returns the content as a string.
+Reads a window of lines rather than the whole file so a large file can be
+walked in pieces instead of blowing up the context in one call.
 */
 var ReadFileToolDefinition = llm.ToolDefinition{
-	Name:                "read_file",
-	Description:         "Reads a file of the given path.",
+	Name: "read_file",
+	Description: `Reads a file of the given path.
+
+Output is line numbered, "<line number>\t<content>", so a line number read here can be passed straight back as 'offset'.
+
+Reads a window of the file: 'offset' is the first line to read (1 based) and 'limit' is how many lines to read. Leave both at 0 to read the file from the start; a file longer than the read limit is cut off and the result says how many lines are left, so read the rest with a follow up call at the next offset.`,
 	InputSchemaInstance: ReadFileInput{},
 	Func:                ReadFileImpl,
 }
 
+const (
+	// defaultReadLineLimit is how much of a file one call returns when the
+	// caller does not ask for a window. Big enough for most source files,
+	// small enough that reading a log file does not end the session.
+	defaultReadLineLimit = 2000
+	// maxReadLineWidth is where a single long line gets cut. Minified files
+	// are one line, and that line is not worth the whole context.
+	maxReadLineWidth = 2000
+)
+
 type ReadFileInput struct {
 	Path string `json:"path" jsonschema_description:"The path to the file"`
+	// Offset and Limit are plain ints rather than pointers, 0 is the unset
+	// value. Some providers want every property to be required, so the model
+	// sends both on every call whether it cares about them or not.
+	Offset int `json:"offset" jsonschema_description:"The line to start reading from, 1 based. 0 reads from the start of the file."`
+	Limit  int `json:"limit" jsonschema_description:"How many lines to read starting at offset. 0 reads to the end of the file, capped at 2000 lines."`
 }
 
 var ReadFileImpl = func(message json.RawMessage) (string, error) {
@@ -85,15 +140,84 @@ var ReadFileImpl = func(message json.RawMessage) (string, error) {
 		return "", err
 	}
 	path := input.Path
-	if path == ".env" {
+	if filepath.Base(path) == ".env" {
 		return "", fmt.Errorf(".env file is not allowed to be read")
 	}
+	if input.Offset < 0 || input.Limit < 0 {
+		return "", fmt.Errorf("offset and limit cannot be negative")
+	}
 
-	data, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return "", fmt.Errorf("error reading file: %w", err)
 	}
-	return string(data), nil
+	defer file.Close()
+
+	if info, err := file.Stat(); err == nil && info.IsDir() {
+		return "", fmt.Errorf("error reading file: %s is a directory", path)
+	}
+
+	return readWindow(file, input.Offset, input.Limit)
+}
+
+// readWindow returns the requested lines, numbered, plus a note about what was
+// left unread so the caller knows there is more file to ask for.
+func readWindow(r io.Reader, offset, limit int) (string, error) {
+	first := offset
+	if first < 1 {
+		first = 1
+	}
+	if limit == 0 {
+		limit = defaultReadLineLimit
+	}
+
+	var out strings.Builder
+	lineNo := 0
+	shown := 0
+	remaining := 0
+
+	reader := bufio.NewReader(r)
+	for {
+		line, err := reader.ReadString('\n')
+		if line == "" && err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", fmt.Errorf("error reading file: %w", err)
+		}
+		lineNo++
+		if lineNo >= first && shown < limit {
+			out.WriteString(fmt.Sprintf("%d\t%s\n", lineNo, truncateLine(strings.TrimRight(line, "\r\n"))))
+			shown++
+		} else if lineNo > first {
+			remaining++
+		}
+		if err != nil {
+			// last line of a file with no trailing newline
+			break
+		}
+	}
+
+	if lineNo == 0 {
+		return "(file is empty)", nil
+	}
+	if shown == 0 {
+		return "", fmt.Errorf("offset %d is past the end of the file, it has %d lines", first, lineNo)
+	}
+	if remaining > 0 {
+		out.WriteString(fmt.Sprintf("\n(read lines %d-%d of %d, %d lines not read, continue at offset %d)",
+			first, first+shown-1, lineNo, remaining, first+shown))
+	}
+	return out.String(), nil
+}
+
+// truncateLine keeps one absurdly long line, a minified bundle say, from
+// taking the space the rest of the read was meant to have.
+func truncateLine(line string) string {
+	if len(line) <= maxReadLineWidth {
+		return line
+	}
+	return line[:maxReadLineWidth] + fmt.Sprintf("... (line truncated, %d bytes total)", len(line))
 }
 
 // endregion

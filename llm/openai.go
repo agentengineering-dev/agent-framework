@@ -46,12 +46,9 @@ func (o *openAILLM) RunInference(messages []Message, tools []ToolDefinition) ([]
 	if err != nil {
 		return nil, nil, err
 	}
-	cost := computeOpenAICost(openai.ChatModelGPT5_2, chatCompletion.Usage)
+	md := openAICompatMetadata(PROVIDER_OPENAI, string(openai.ChatModelGPT5_2), chatCompletion.Usage, timeTaken, computeOpenAICost(openai.ChatModelGPT5_2, chatCompletion.Usage))
 	if chatCompletion.Choices[0].FinishReason == "length" {
-		return nil, &InferenceMetadata{
-			Cost: cost,
-			Time: timeTaken,
-		}, errors.New("max token exceeded")
+		return nil, md, errors.New("max token exceeded")
 	}
 	responseMessages := []Message{}
 
@@ -79,10 +76,22 @@ func (o *openAILLM) RunInference(messages []Message, tools []ToolDefinition) ([]
 		}
 	}
 
-	return responseMessages, &InferenceMetadata{
-		Cost: cost,
-		Time: timeTaken,
-	}, nil
+	return responseMessages, md, nil
+}
+
+// openAICompatMetadata folds an openai style usage block into our metadata.
+// openai, deepseek and the unsloth studio endpoint all report usage this way.
+func openAICompatMetadata(provider string, model string, usage openai.CompletionUsage, timeTaken time.Duration, cost float64) *InferenceMetadata {
+	return &InferenceMetadata{
+		Cost:          cost,
+		Time:          timeTaken,
+		Provider:      provider,
+		Model:         model,
+		InputTokens:   usage.PromptTokens,
+		OutputTokens:  usage.CompletionTokens,
+		CachedTokens:  usage.PromptTokensDetails.CachedTokens,
+		ContextWindow: ContextWindowOf(provider, model),
+	}
 }
 
 func computeOpenAICost(model string, usage openai.CompletionUsage) float64 {
@@ -232,13 +241,10 @@ func (o openAILLM) GenerateStructuredResponse(messages []Message, resp interface
 	}
 	timeTaken := time.Since(now)
 
-	cost := computeOpenAICost(openai.ChatModelGPT5_2, chatCompletion.Usage)
+	md := openAICompatMetadata(PROVIDER_OPENAI, string(openai.ChatModelGPT5_2), chatCompletion.Usage, timeTaken, computeOpenAICost(openai.ChatModelGPT5_2, chatCompletion.Usage))
 
 	if chatCompletion.Choices[0].FinishReason == "length" {
-		return &InferenceMetadata{
-			Cost: cost,
-			Time: timeTaken,
-		}, errors.New("max token exceeded")
+		return md, errors.New("max token exceeded")
 	}
 
 	if len(chatCompletion.Choices) > 0 {
@@ -246,17 +252,11 @@ func (o openAILLM) GenerateStructuredResponse(messages []Message, resp interface
 		if msg.Content != "" {
 			err := json.Unmarshal([]byte(msg.Content), resp)
 			if err != nil {
-				return &InferenceMetadata{
-					Cost: cost,
-					Time: timeTaken,
-				}, err
+				return md, err
 			}
 		}
 
 	}
 
-	return &InferenceMetadata{
-		Cost: cost,
-		Time: timeTaken,
-	}, nil
+	return md, nil
 }

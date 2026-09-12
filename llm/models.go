@@ -1,6 +1,9 @@
 package llm
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 const PROVIDER_ANTHROPIC = "anthropic"
 const PROVIDER_OPENAI = "openai"
@@ -250,4 +253,40 @@ var MODELS = map[string][]Model{
 			KnowledgeCutoff: time.Time{},
 		},
 	},
+}
+
+// LookupModel finds a model by the id the provider knows it by, or by the
+// alias we use internally. Providers are not consistent about how specific the
+// id they hand back is (gpt-5.2 vs gpt-5.2-pro-2025-12-11), so an exact miss
+// falls back to the longest catalogued id that shares a prefix with it. It
+// returns nil for models we have not catalogued at all.
+func LookupModel(provider string, model string) *Model {
+	if model == "" {
+		return nil
+	}
+
+	var prefixMatch *Model
+	for _, m := range MODELS[provider] {
+		if m.ModelID == model || m.ModelAlias == model {
+			found := m
+			return &found
+		}
+		if !strings.HasPrefix(m.ModelID, model) && !strings.HasPrefix(model, m.ModelID) {
+			continue
+		}
+		if prefixMatch == nil || len(m.ModelID) > len(prefixMatch.ModelID) {
+			found := m
+			prefixMatch = &found
+		}
+	}
+	return prefixMatch
+}
+
+// ContextWindowOf reports the context window of a model, 0 when unknown, in
+// which case the ui shows the raw token count without a percentage.
+func ContextWindowOf(provider string, model string) int64 {
+	if m := LookupModel(provider, model); m != nil {
+		return m.ContextWindow
+	}
+	return 0
 }

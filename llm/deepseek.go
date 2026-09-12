@@ -45,12 +45,9 @@ func (o *deepseekLLM) RunInference(messages []Message, tools []ToolDefinition) (
 	if err != nil {
 		return nil, nil, err
 	}
-	cost := computeDeepseekCost(MODEL_DEEPSEEK_CHAT, chatCompletion.Usage)
+	md := openAICompatMetadata(PROVIDER_DEEPSEEK, MODEL_DEEPSEEK_CHAT, chatCompletion.Usage, timeTaken, computeDeepseekCost(MODEL_DEEPSEEK_CHAT, chatCompletion.Usage))
 	if chatCompletion.Choices[0].FinishReason == "length" {
-		return nil, &InferenceMetadata{
-			Cost: cost,
-			Time: timeTaken,
-		}, errors.New("max token exceeded")
+		return nil, md, errors.New("max token exceeded")
 	}
 	responseMessages := []Message{}
 
@@ -78,10 +75,7 @@ func (o *deepseekLLM) RunInference(messages []Message, tools []ToolDefinition) (
 		}
 	}
 
-	return responseMessages, &InferenceMetadata{
-		Cost: cost,
-		Time: timeTaken,
-	}, nil
+	return responseMessages, md, nil
 }
 
 func (o deepseekLLM) GenerateStructuredResponse(messages []Message, resp interface{}) (*InferenceMetadata, error) {
@@ -114,13 +108,10 @@ func (o deepseekLLM) GenerateStructuredResponse(messages []Message, resp interfa
 	}
 	timeTaken := time.Since(now)
 
-	cost := computeDeepseekCost(MODEL_DEEPSEEK_CHAT, chatCompletion.Usage)
+	md := openAICompatMetadata(PROVIDER_DEEPSEEK, MODEL_DEEPSEEK_CHAT, chatCompletion.Usage, timeTaken, computeDeepseekCost(MODEL_DEEPSEEK_CHAT, chatCompletion.Usage))
 
 	if chatCompletion.Choices[0].FinishReason == "length" {
-		return &InferenceMetadata{
-			Cost: cost,
-			Time: timeTaken,
-		}, errors.New("max token exceeded")
+		return md, errors.New("max token exceeded")
 	}
 
 	if len(chatCompletion.Choices) > 0 {
@@ -129,19 +120,13 @@ func (o deepseekLLM) GenerateStructuredResponse(messages []Message, resp interfa
 			toolCall := call.AsFunction()
 			err := json.Unmarshal([]byte(toolCall.Function.Arguments), resp)
 			if err != nil {
-				return &InferenceMetadata{
-					Cost: cost,
-					Time: timeTaken,
-				}, err
+				return md, err
 			}
 		}
 
 	}
 
-	return &InferenceMetadata{
-		Cost: cost,
-		Time: timeTaken,
-	}, nil
+	return md, nil
 }
 
 func computeDeepseekCost(model string, usage openai.CompletionUsage) float64 {

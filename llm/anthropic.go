@@ -38,7 +38,7 @@ func (a *anthropicLLM) GenerateStructuredResponse(messages []Message, resp inter
 	}
 	timeTaken := time.Since(now)
 
-	cost := computeAnthropicCost(string(anthropic.ModelClaudeSonnet4_5_20250929), anthropicRespMessage.Usage)
+	md := anthropicMetadata(string(anthropic.ModelClaudeSonnet4_5_20250929), anthropicRespMessage.Usage, timeTaken)
 
 	for _, m := range anthropicRespMessage.Content {
 		if m.Type == "tool_use" {
@@ -46,18 +46,12 @@ func (a *anthropicLLM) GenerateStructuredResponse(messages []Message, resp inter
 			err := json.Unmarshal(toolUse.Input, resp)
 
 			if err != nil {
-				return &InferenceMetadata{
-					Cost: cost,
-					Time: timeTaken,
-				}, err
+				return md, err
 			}
 		}
 	}
 
-	return &InferenceMetadata{
-		Cost: cost,
-		Time: timeTaken,
-	}, nil
+	return md, nil
 }
 
 func NewAnthropicClient() *anthropicLLM {
@@ -84,10 +78,10 @@ func (a *anthropicLLM) RunInference(messages []Message, tools []ToolDefinition) 
 		return nil, nil, err
 	}
 	timeTaken := time.Since(now)
-	cost := computeAnthropicCost(string(anthropic.ModelClaudeSonnet4_5_20250929), anthropicRespMessage.Usage)
+	md := anthropicMetadata(string(anthropic.ModelClaudeSonnet4_5_20250929), anthropicRespMessage.Usage, timeTaken)
 
 	if anthropicRespMessage.StopReason == "max_tokens" {
-		return nil, &InferenceMetadata{Cost: cost, Time: timeTaken}, fmt.Errorf("max_tokens exceeded")
+		return nil, md, fmt.Errorf("max_tokens exceeded")
 	}
 	responseMessages := []Message{}
 
@@ -111,8 +105,23 @@ func (a *anthropicLLM) RunInference(messages []Message, tools []ToolDefinition) 
 		}
 	}
 
-	return responseMessages, &InferenceMetadata{Cost: cost, Time: timeTaken}, nil
+	return responseMessages, md, nil
 
+}
+
+// anthropicMetadata folds an anthropic usage block into the metadata the agent
+// loop reports to the ui.
+func anthropicMetadata(model string, usage anthropic.Usage, timeTaken time.Duration) *InferenceMetadata {
+	return &InferenceMetadata{
+		Cost:          computeAnthropicCost(model, usage),
+		Time:          timeTaken,
+		Provider:      PROVIDER_ANTHROPIC,
+		Model:         model,
+		InputTokens:   usage.InputTokens + usage.CacheReadInputTokens + usage.CacheCreation.Ephemeral5mInputTokens + usage.CacheCreation.Ephemeral1hInputTokens,
+		OutputTokens:  usage.OutputTokens,
+		CachedTokens:  usage.CacheReadInputTokens,
+		ContextWindow: ContextWindowOf(PROVIDER_ANTHROPIC, model),
+	}
 }
 
 func computeAnthropicCost(model string, usage anthropic.Usage) float64 {

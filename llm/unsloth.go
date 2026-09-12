@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +22,9 @@ import (
 type unslothLLM struct {
 	client openai.Client
 	model  string
+	// what the studio was started with, the model catalogue only knows the
+	// default. UNSLOTH_CONTEXT_WINDOW overrides it.
+	contextWindow int64
 }
 
 func NewUnslothLLM() (*unslothLLM, error) {
@@ -37,15 +43,97 @@ func NewUnslothLLM() (*unslothLLM, error) {
 		model = MODEL_UNSLOTH_QWEN3_27B
 	}
 
+	apiKey := os.Getenv("UNSLOTH_API_KEY")
+
 	client := openai.NewClient(
 		option.WithBaseURL(baseURL),
-		option.WithAPIKey(os.Getenv("UNSLOTH_API_KEY")),
+		option.WithAPIKey(apiKey),
 	)
 
+	// the studio knows what it actually loaded, which is almost never the
+	// model's native window. the catalogue is only the fallback for when it
+	// cannot be reached.
+	contextWindow := ContextWindowOf(PROVIDER_UNSLOTH, model)
+	if served, err := fetchUnslothContextWindow(baseURL, apiKey, model); err != nil {
+		fmt.Println("unsloth: falling back to the catalogued context window: " + err.Error())
+	} else {
+		contextWindow = served
+	}
+
+	// an explicit override still wins, the studio can be wrong about a model
+	// it is proxying rather than serving itself.
+	if override := os.Getenv("UNSLOTH_CONTEXT_WINDOW"); override != "" {
+		parsed, err := strconv.ParseInt(strings.TrimSpace(override), 10, 64)
+		if err != nil {
+			return nil, errors.New("UNSLOTH_CONTEXT_WINDOW must be an integer, got: " + override)
+		}
+		contextWindow = parsed
+	}
+
 	return &unslothLLM{
-		client: client,
-		model:  model,
+		client:        client,
+		model:         model,
+		contextWindow: contextWindow,
 	}, nil
+}
+
+// unslothModel is the part of an unsloth studio /v1/models entry we care
+// about. The studio adds the context fields on top of the openai shape:
+// context_length is what it is serving right now, native_context_length is
+// what the model was trained with.
+type unslothModel struct {
+	ID                  string `json:"id"`
+	ContextLength       int64  `json:"context_length"`
+	MaxContextLength    int64  `json:"max_context_length"`
+	NativeContextLength int64  `json:"native_context_length"`
+	Loaded              bool   `json:"loaded"`
+}
+
+// fetchUnslothContextWindow asks the studio how large a context it is actually
+// serving the model with. That served size, not the model's native window, is
+// what the session has to fit inside, so it is what the ui gauges against.
+func fetchUnslothContextWindow(baseURL string, apiKey string, model string) (int64, error) {
+	req, err := http.NewRequest(http.MethodGet, baseURL+"models", nil)
+	if err != nil {
+		return 0, err
+	}
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+
+	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("studio returned %s for %smodels", resp.Status, baseURL)
+	}
+
+	var payload struct {
+		Data []unslothModel `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return 0, err
+	}
+
+	for _, m := range payload.Data {
+		if m.ID != model {
+			continue
+		}
+		// context_length is the loaded size, max_context_length is what the
+		// studio would allow, either beats guessing.
+		if m.ContextLength > 0 {
+			return m.ContextLength, nil
+		}
+		if m.MaxContextLength > 0 {
+			return m.MaxContextLength, nil
+		}
+		return 0, fmt.Errorf("studio reported no context length for %s", model)
+	}
+
+	return 0, fmt.Errorf("%s is not among the models the studio has loaded", model)
 }
 
 // unslothBaseURL turns UNSLOTH_API_HOST (e.g. http://127.0.0.1:8888) into the
@@ -89,10 +177,7 @@ func (o *unslothLLM) RunInference(messages []Message, tools []ToolDefinition) ([
 	}
 
 	// self hosted inference, nothing to bill.
-	metadata := &InferenceMetadata{
-		Cost: 0,
-		Time: timeTaken,
-	}
+	metadata := o.metadata(chatCompletion.Usage, timeTaken)
 
 	if len(chatCompletion.Choices) == 0 {
 		return nil, metadata, errors.New("no choices returned")
@@ -157,10 +242,7 @@ func (o *unslothLLM) GenerateStructuredResponse(messages []Message, resp interfa
 	}
 	timeTaken := time.Since(now)
 
-	metadata := &InferenceMetadata{
-		Cost: 0,
-		Time: timeTaken,
-	}
+	metadata := o.metadata(chatCompletion.Usage, timeTaken)
 
 	if len(chatCompletion.Choices) == 0 {
 		return metadata, errors.New("no choices returned")
@@ -180,4 +262,12 @@ func (o *unslothLLM) GenerateStructuredResponse(messages []Message, resp interfa
 	}
 
 	return metadata, nil
+}
+
+// metadata reports the studio's token counts, they are what the ui turns into
+// the context gauge and the observed tokens per second.
+func (o *unslothLLM) metadata(usage openai.CompletionUsage, timeTaken time.Duration) *InferenceMetadata {
+	md := openAICompatMetadata(PROVIDER_UNSLOTH, o.model, usage, timeTaken, 0)
+	md.ContextWindow = o.contextWindow
+	return md
 }
